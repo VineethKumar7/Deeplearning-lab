@@ -1,0 +1,477 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8"/>
+  <title>rnn_scratch_Exercises.ipynb</title>
+</head>
+<body>
+<h1>Implementation of Recurrent Neural Networks from Scratch</h1>
+<p>In this section we will implement an RNN
+from scratch
+for a character-level language model,
+according to our descriptions.
+Such a model
+will be trained on H. G. Wells' <em>The Time Machine</em>.
+As before, we start by reading the dataset first.</p>
+<div class="codehilite"><pre><span></span><code><span class="c1"># You need the following line only if you use google colab</span>
+
+<span class="err">!</span> <span class="n">pip</span> <span class="n">install</span> <span class="n">d2l</span> <span class="o">--</span><span class="n">no</span><span class="o">-</span><span class="n">dependencies</span>
+<span class="o">%</span><span class="n">matplotlib</span> <span class="n">inline</span>
+<span class="kn">import</span> <span class="nn">math</span>
+<span class="kn">import</span> <span class="nn">torch</span>
+<span class="kn">from</span> <span class="nn">torch</span> <span class="kn">import</span> <span class="n">nn</span>
+<span class="kn">from</span> <span class="nn">torch.nn</span> <span class="kn">import</span> <span class="n">functional</span> <span class="k">as</span> <span class="n">F</span>
+<span class="kn">from</span> <span class="nn">d2l</span> <span class="kn">import</span> <span class="n">torch</span> <span class="k">as</span> <span class="n">d2l</span>
+</code></pre></div>
+
+<div class="codehilite"><pre><span></span><code><span class="n">Collecting</span><span class="w"> </span><span class="n">d2l</span>
+<span class="w">  </span><span class="n">Downloading</span><span class="w"> </span><span class="n">d2l</span><span class="o">-</span><span class="mf">0.17</span><span class="o">.</span><span class="mi">0</span><span class="o">-</span><span class="n">py3</span><span class="o">-</span><span class="n">none</span><span class="o">-</span><span class="n">any</span><span class="o">.</span><span class="n">whl</span><span class="w"> </span><span class="p">(</span><span class="mi">83</span><span class="w"> </span><span class="n">kB</span><span class="p">)</span>
+<span class="err"></span><span class="p">[</span><span class="err">?</span><span class="mi">25</span><span class="n">l</span>
+</code></pre></div>
+
+<p>[K     |████                            | 10 kB 24.9 MB/s eta 0:00:01
+[K     |███████▉                        | 20 kB 30.9 MB/s eta 0:00:01
+[K     |███████████▉                    | 30 kB 21.4 MB/s eta 0:00:01
+[K     |███████████████▊                | 40 kB 17.1 MB/s eta 0:00:01
+[K     |███████████████████▊            | 51 kB 7.9 MB/s eta 0:00:01
+[K     |███████████████████████▋        | 61 kB 8.4 MB/s eta 0:00:01
+[K     |███████████████████████████▋    | 71 kB 7.9 MB/s eta 0:00:01
+[K     |███████████████████████████████▌| 81 kB 8.8 MB/s eta 0:00:01
+[K     |████████████████████████████████| 83 kB 1.3 MB/s 
+    [?25hRequirement already satisfied: numpy in /usr/local/lib/python3.7/dist-packages (from d2l) (1.19.5)
+    Requirement already satisfied: jupyter in /usr/local/lib/python3.7/dist-packages (from d2l) (1.0.0)
+    Requirement already satisfied: matplotlib in /usr/local/lib/python3.7/dist-packages (from d2l) (3.2.2)
+    Requirement already satisfied: requests in /usr/local/lib/python3.7/dist-packages (from d2l) (2.23.0)
+    Requirement already satisfied: pandas in /usr/local/lib/python3.7/dist-packages (from d2l) (1.1.5)
+    Requirement already satisfied: nbconvert in /usr/local/lib/python3.7/dist-packages (from jupyter-&gt;d2l) (5.6.1)
+    Requirement already satisfied: jupyter-console in /usr/local/lib/python3.7/dist-packages (from jupyter-&gt;d2l) (5.2.0)
+    Requirement already satisfied: notebook in /usr/local/lib/python3.7/dist-packages (from jupyter-&gt;d2l) (5.3.1)
+    Requirement already satisfied: ipywidgets in /usr/local/lib/python3.7/dist-packages (from jupyter-&gt;d2l) (7.6.5)
+    Requirement already satisfied: ipykernel in /usr/local/lib/python3.7/dist-packages (from jupyter-&gt;d2l) (4.10.1)
+    Requirement already satisfied: qtconsole in /usr/local/lib/python3.7/dist-packages (from jupyter-&gt;d2l) (5.2.0)
+    Requirement already satisfied: jupyter-client in /usr/local/lib/python3.7/dist-packages (from ipykernel-&gt;jupyter-&gt;d2l) (5.3.5)
+    Requirement already satisfied: ipython&gt;=4.0.0 in /usr/local/lib/python3.7/dist-packages (from ipykernel-&gt;jupyter-&gt;d2l) (5.5.0)
+    Requirement already satisfied: traitlets&gt;=4.1.0 in /usr/local/lib/python3.7/dist-packages (from ipykernel-&gt;jupyter-&gt;d2l) (5.1.1)
+    Requirement already satisfied: tornado&gt;=4.0 in /usr/local/lib/python3.7/dist-packages (from ipykernel-&gt;jupyter-&gt;d2l) (5.1.1)
+    Requirement already satisfied: decorator in /usr/local/lib/python3.7/dist-packages (from ipython&gt;=4.0.0-&gt;ipykernel-&gt;jupyter-&gt;d2l) (4.4.2)
+    Requirement already satisfied: pickleshare in /usr/local/lib/python3.7/dist-packages (from ipython&gt;=4.0.0-&gt;ipykernel-&gt;jupyter-&gt;d2l) (0.7.5)
+    Requirement already satisfied: simplegeneric&gt;0.8 in /usr/local/lib/python3.7/dist-packages (from ipython&gt;=4.0.0-&gt;ipykernel-&gt;jupyter-&gt;d2l) (0.8.1)
+    Requirement already satisfied: prompt-toolkit&lt;2.0.0,&gt;=1.0.4 in /usr/local/lib/python3.7/dist-packages (from ipython&gt;=4.0.0-&gt;ipykernel-&gt;jupyter-&gt;d2l) (1.0.18)
+    Requirement already satisfied: setuptools&gt;=18.5 in /usr/local/lib/python3.7/dist-packages (from ipython&gt;=4.0.0-&gt;ipykernel-&gt;jupyter-&gt;d2l) (57.4.0)
+    Requirement already satisfied: pygments in /usr/local/lib/python3.7/dist-packages (from ipython&gt;=4.0.0-&gt;ipykernel-&gt;jupyter-&gt;d2l) (2.6.1)
+    Requirement already satisfied: pexpect in /usr/local/lib/python3.7/dist-packages (from ipython&gt;=4.0.0-&gt;ipykernel-&gt;jupyter-&gt;d2l) (4.8.0)
+    Requirement already satisfied: six&gt;=1.9.0 in /usr/local/lib/python3.7/dist-packages (from prompt-toolkit&lt;2.0.0,&gt;=1.0.4-&gt;ipython&gt;=4.0.0-&gt;ipykernel-&gt;jupyter-&gt;d2l) (1.15.0)
+    Requirement already satisfied: wcwidth in /usr/local/lib/python3.7/dist-packages (from prompt-toolkit&lt;2.0.0,&gt;=1.0.4-&gt;ipython&gt;=4.0.0-&gt;ipykernel-&gt;jupyter-&gt;d2l) (0.2.5)
+    Requirement already satisfied: jupyterlab-widgets&gt;=1.0.0 in /usr/local/lib/python3.7/dist-packages (from ipywidgets-&gt;jupyter-&gt;d2l) (1.0.2)
+    Requirement already satisfied: ipython-genutils~=0.2.0 in /usr/local/lib/python3.7/dist-packages (from ipywidgets-&gt;jupyter-&gt;d2l) (0.2.0)
+    Requirement already satisfied: widgetsnbextension~=3.5.0 in /usr/local/lib/python3.7/dist-packages (from ipywidgets-&gt;jupyter-&gt;d2l) (3.5.2)
+    Requirement already satisfied: nbformat&gt;=4.2.0 in /usr/local/lib/python3.7/dist-packages (from ipywidgets-&gt;jupyter-&gt;d2l) (5.1.3)
+    Requirement already satisfied: jsonschema!=2.5.0,&gt;=2.4 in /usr/local/lib/python3.7/dist-packages (from nbformat&gt;=4.2.0-&gt;ipywidgets-&gt;jupyter-&gt;d2l) (2.6.0)
+    Requirement already satisfied: jupyter-core in /usr/local/lib/python3.7/dist-packages (from nbformat&gt;=4.2.0-&gt;ipywidgets-&gt;jupyter-&gt;d2l) (4.9.1)
+    Requirement already satisfied: Send2Trash in /usr/local/lib/python3.7/dist-packages (from notebook-&gt;jupyter-&gt;d2l) (1.8.0)
+    Requirement already satisfied: jinja2 in /usr/local/lib/python3.7/dist-packages (from notebook-&gt;jupyter-&gt;d2l) (2.11.3)
+    Requirement already satisfied: terminado&gt;=0.8.1 in /usr/local/lib/python3.7/dist-packages (from notebook-&gt;jupyter-&gt;d2l) (0.12.1)
+    Requirement already satisfied: pyzmq&gt;=13 in /usr/local/lib/python3.7/dist-packages (from jupyter-client-&gt;ipykernel-&gt;jupyter-&gt;d2l) (22.3.0)
+    Requirement already satisfied: python-dateutil&gt;=2.1 in /usr/local/lib/python3.7/dist-packages (from jupyter-client-&gt;ipykernel-&gt;jupyter-&gt;d2l) (2.8.2)
+    Requirement already satisfied: ptyprocess in /usr/local/lib/python3.7/dist-packages (from terminado&gt;=0.8.1-&gt;notebook-&gt;jupyter-&gt;d2l) (0.7.0)
+    Requirement already satisfied: MarkupSafe&gt;=0.23 in /usr/local/lib/python3.7/dist-packages (from jinja2-&gt;notebook-&gt;jupyter-&gt;d2l) (2.0.1)
+    Requirement already satisfied: cycler&gt;=0.10 in /usr/local/lib/python3.7/dist-packages (from matplotlib-&gt;d2l) (0.11.0)
+    Requirement already satisfied: kiwisolver&gt;=1.0.1 in /usr/local/lib/python3.7/dist-packages (from matplotlib-&gt;d2l) (1.3.2)
+    Requirement already satisfied: pyparsing!=2.0.4,!=2.1.2,!=2.1.6,&gt;=2.0.1 in /usr/local/lib/python3.7/dist-packages (from matplotlib-&gt;d2l) (3.0.6)
+    Requirement already satisfied: mistune&lt;2,&gt;=0.8.1 in /usr/local/lib/python3.7/dist-packages (from nbconvert-&gt;jupyter-&gt;d2l) (0.8.4)
+    Requirement already satisfied: defusedxml in /usr/local/lib/python3.7/dist-packages (from nbconvert-&gt;jupyter-&gt;d2l) (0.7.1)
+    Requirement already satisfied: entrypoints&gt;=0.2.2 in /usr/local/lib/python3.7/dist-packages (from nbconvert-&gt;jupyter-&gt;d2l) (0.3)
+    Requirement already satisfied: pandocfilters&gt;=1.4.1 in /usr/local/lib/python3.7/dist-packages (from nbconvert-&gt;jupyter-&gt;d2l) (1.5.0)
+    Requirement already satisfied: bleach in /usr/local/lib/python3.7/dist-packages (from nbconvert-&gt;jupyter-&gt;d2l) (4.1.0)
+    Requirement already satisfied: testpath in /usr/local/lib/python3.7/dist-packages (from nbconvert-&gt;jupyter-&gt;d2l) (0.5.0)
+    Requirement already satisfied: webencodings in /usr/local/lib/python3.7/dist-packages (from bleach-&gt;nbconvert-&gt;jupyter-&gt;d2l) (0.5.1)
+    Requirement already satisfied: packaging in /usr/local/lib/python3.7/dist-packages (from bleach-&gt;nbconvert-&gt;jupyter-&gt;d2l) (21.3)
+    Requirement already satisfied: pytz&gt;=2017.2 in /usr/local/lib/python3.7/dist-packages (from pandas-&gt;d2l) (2018.9)
+    Requirement already satisfied: qtpy in /usr/local/lib/python3.7/dist-packages (from qtconsole-&gt;jupyter-&gt;d2l) (1.11.2)
+    Requirement already satisfied: urllib3!=1.25.0,!=1.25.1,&lt;1.26,&gt;=1.21.1 in /usr/local/lib/python3.7/dist-packages (from requests-&gt;d2l) (1.24.3)
+    Requirement already satisfied: chardet&lt;4,&gt;=3.0.2 in /usr/local/lib/python3.7/dist-packages (from requests-&gt;d2l) (3.0.4)
+    Requirement already satisfied: idna&lt;3,&gt;=2.5 in /usr/local/lib/python3.7/dist-packages (from requests-&gt;d2l) (2.10)
+    Requirement already satisfied: certifi&gt;=2017.4.17 in /usr/local/lib/python3.7/dist-packages (from requests-&gt;d2l) (2021.10.8)
+    Installing collected packages: d2l
+    Successfully installed d2l-0.17.0</p>
+<div class="codehilite"><pre><span></span><code><span class="n">batch_size</span><span class="p">,</span> <span class="n">num_steps</span> <span class="o">=</span> <span class="mi">32</span><span class="p">,</span> <span class="mi">35</span>
+<span class="n">train_iter</span><span class="p">,</span> <span class="n">vocab</span> <span class="o">=</span> <span class="n">d2l</span><span class="o">.</span><span class="n">load_data_time_machine</span><span class="p">(</span><span class="n">batch_size</span><span class="p">,</span> <span class="n">num_steps</span><span class="p">)</span>
+</code></pre></div>
+
+<div class="codehilite"><pre><span></span><code><span class="n">Downloading</span><span class="w"> </span><span class="o">../</span><span class="n">data</span><span class="o">/</span><span class="n">timemachine</span><span class="o">.</span><span class="n">txt</span><span class="w"> </span><span class="n">from</span><span class="w"> </span><span class="n">http</span><span class="p">:</span><span class="o">//</span><span class="n">d2l</span><span class="o">-</span><span class="n">data</span><span class="o">.</span><span class="n">s3</span><span class="o">-</span><span class="n">accelerate</span><span class="o">.</span><span class="n">amazonaws</span><span class="o">.</span><span class="n">com</span><span class="o">/</span><span class="n">timemachine</span><span class="o">.</span><span class="n">txt</span><span class="o">...</span>
+</code></pre></div>
+
+<h2><strong>One-Hot Encoding</strong></h2>
+<p>Recall that each token is represented as a numerical index in <code>train_iter</code>.
+Feeding these indices directly to a neural network might make it hard to
+learn.
+We often represent each token as a more expressive feature vector.
+The easiest representation is called <em>one-hot encoding</em>.</p>
+<p>In a nutshell, we map each index to a different unit vector: assume that the number of different tokens in the vocabulary is $N$ (<code>len(vocab)</code>) and the token indices range from $0$ to $N-1$.
+If the index of a token is the integer $i$, then we create a vector of all 0s with a length of $N$ and set the element at position $i$ to 1.
+This vector is the one-hot vector of the original token. The one-hot vectors with indices 0 and 2 are shown below.</p>
+<div class="codehilite"><pre><span></span><code><span class="n">F</span><span class="o">.</span><span class="n">one_hot</span><span class="p">(</span><span class="n">torch</span><span class="o">.</span><span class="n">tensor</span><span class="p">([</span><span class="mi">0</span><span class="p">,</span> <span class="mi">2</span><span class="p">]),</span> <span class="nb">len</span><span class="p">(</span><span class="n">vocab</span><span class="p">))</span>
+</code></pre></div>
+
+<div class="codehilite"><pre><span></span><code>tensor([[1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+         0, 0, 0, 0],
+        [0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+         0, 0, 0, 0]])
+</code></pre></div>
+
+<p><strong>The shape of the minibatch</strong> that we sample each time <strong>is (batch size, number of time steps).
+The <code>one_hot</code> function transforms such a minibatch into a three-dimensional tensor with the last dimension equals to the vocabulary size (<code>len(vocab)</code>).</strong>
+We often transpose the input so that we will obtain an
+output of shape
+(number of time steps, batch size, vocabulary size).
+This will allow us
+to more conveniently
+loop through the outermost dimension
+for updating hidden states of a minibatch,
+time step by time step.</p>
+<div class="codehilite"><pre><span></span><code><span class="n">X</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="mi">10</span><span class="p">)</span><span class="o">.</span><span class="n">reshape</span><span class="p">((</span><span class="mi">2</span><span class="p">,</span> <span class="mi">5</span><span class="p">))</span>
+<span class="n">F</span><span class="o">.</span><span class="n">one_hot</span><span class="p">(</span><span class="n">X</span><span class="o">.</span><span class="n">T</span><span class="p">,</span> <span class="mi">28</span><span class="p">)</span><span class="o">.</span><span class="n">shape</span>
+</code></pre></div>
+
+<div class="codehilite"><pre><span></span><code>torch.Size([5, 2, 28])
+</code></pre></div>
+
+<h2>Initializing the Model Parameters</h2>
+<p>Next, we <strong>initialize the model parameters for
+the RNN model</strong>.
+The number of hidden units <code>num_hiddens</code> is a tunable hyperparameter.
+When training language models,
+the inputs and outputs are from the same vocabulary.
+Hence, they have the same dimension,
+which is equal to the vocabulary size.</p>
+<div class="codehilite"><pre><span></span><code><span class="k">def</span> <span class="nf">get_params</span><span class="p">(</span><span class="n">vocab_size</span><span class="p">,</span> <span class="n">num_hiddens</span><span class="p">,</span> <span class="n">device</span><span class="p">):</span>
+    <span class="n">num_inputs</span> <span class="o">=</span> <span class="n">num_outputs</span> <span class="o">=</span> <span class="n">vocab_size</span>
+
+    <span class="k">def</span> <span class="nf">normal</span><span class="p">(</span><span class="n">shape</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">torch</span><span class="o">.</span><span class="n">randn</span><span class="p">(</span><span class="n">size</span><span class="o">=</span><span class="n">shape</span><span class="p">,</span> <span class="n">device</span><span class="o">=</span><span class="n">device</span><span class="p">)</span> <span class="o">*</span> <span class="mf">0.01</span>
+
+    <span class="c1"># Hidden layer parameters</span>
+    <span class="n">W_xh</span> <span class="o">=</span> <span class="n">normal</span><span class="p">((</span><span class="n">num_inputs</span><span class="p">,</span> <span class="n">num_hiddens</span><span class="p">))</span>
+    <span class="n">W_hh</span> <span class="o">=</span> <span class="n">normal</span><span class="p">((</span><span class="n">num_hiddens</span><span class="p">,</span> <span class="n">num_hiddens</span><span class="p">))</span>
+    <span class="n">b_h</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="n">num_hiddens</span><span class="p">,</span> <span class="n">device</span><span class="o">=</span><span class="n">device</span><span class="p">)</span>
+    <span class="c1"># Output layer parameters</span>
+    <span class="n">W_hq</span> <span class="o">=</span> <span class="n">normal</span><span class="p">((</span><span class="n">num_hiddens</span><span class="p">,</span> <span class="n">num_outputs</span><span class="p">))</span>
+    <span class="n">b_q</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="n">num_outputs</span><span class="p">,</span> <span class="n">device</span><span class="o">=</span><span class="n">device</span><span class="p">)</span>
+    <span class="c1"># Attach gradients</span>
+    <span class="n">params</span> <span class="o">=</span> <span class="p">[</span><span class="n">W_xh</span><span class="p">,</span> <span class="n">W_hh</span><span class="p">,</span> <span class="n">b_h</span><span class="p">,</span> <span class="n">W_hq</span><span class="p">,</span> <span class="n">b_q</span><span class="p">]</span>
+    <span class="k">for</span> <span class="n">param</span> <span class="ow">in</span> <span class="n">params</span><span class="p">:</span>
+        <span class="n">param</span><span class="o">.</span><span class="n">requires_grad_</span><span class="p">(</span><span class="kc">True</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">params</span>
+</code></pre></div>
+
+<h2>RNN Model</h2>
+<p>To define an RNN model,
+we first need <strong>an <code>init_rnn_state</code> function
+to return the hidden state at initialization.</strong>
+It returns a tensor filled with 0 and with a shape of (batch size, number of hidden units).
+Using tuples makes it easier to handle situations where the hidden state contains multiple variables,
+which we will encounter in later sections.</p>
+<div class="codehilite"><pre><span></span><code><span class="k">def</span> <span class="nf">init_rnn_state</span><span class="p">(</span><span class="n">batch_size</span><span class="p">,</span> <span class="n">num_hiddens</span><span class="p">,</span> <span class="n">device</span><span class="p">):</span>
+    <span class="k">return</span> <span class="p">(</span><span class="n">torch</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="n">batch_size</span><span class="p">,</span> <span class="n">num_hiddens</span><span class="p">),</span> <span class="n">device</span><span class="o">=</span><span class="n">device</span><span class="p">),)</span>
+</code></pre></div>
+
+<p>The following <code>rnn</code> function defines how to compute the hidden state and output
+at a time step.
+Note that
+the RNN model
+loops through the outermost dimension of <code>inputs</code>
+so that it updates hidden states <code>H</code> of a minibatch,
+time step by time step.
+Besides,
+the activation function here uses the $\tanh$ function.
+The
+mean value of the $\tanh$ function is 0, when the elements are uniformly
+distributed over the real numbers.</p>
+<div class="codehilite"><pre><span></span><code><span class="k">def</span> <span class="nf">rnn</span><span class="p">(</span><span class="n">inputs</span><span class="p">,</span> <span class="n">state</span><span class="p">,</span> <span class="n">params</span><span class="p">):</span>
+    <span class="c1"># Here `inputs` shape: (`num_steps`, `batch_size`, `vocab_size`)</span>
+    <span class="n">W_xh</span><span class="p">,</span> <span class="n">W_hh</span><span class="p">,</span> <span class="n">b_h</span><span class="p">,</span> <span class="n">W_hq</span><span class="p">,</span> <span class="n">b_q</span> <span class="o">=</span> <span class="n">params</span>
+    <span class="n">H</span><span class="p">,</span> <span class="o">=</span> <span class="n">state</span>
+    <span class="n">outputs</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="c1"># Shape of `X`: (`batch_size`, `vocab_size`)</span>
+    <span class="k">for</span> <span class="n">X</span> <span class="ow">in</span> <span class="n">inputs</span><span class="p">:</span>
+        <span class="n">H</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">tanh</span><span class="p">(</span><span class="n">torch</span><span class="o">.</span><span class="n">mm</span><span class="p">(</span><span class="n">X</span><span class="p">,</span> <span class="n">W_xh</span><span class="p">)</span> <span class="o">+</span> <span class="n">torch</span><span class="o">.</span><span class="n">mm</span><span class="p">(</span><span class="n">H</span><span class="p">,</span> <span class="n">W_hh</span><span class="p">)</span> <span class="o">+</span> <span class="n">b_h</span><span class="p">)</span>
+        <span class="n">Y</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">mm</span><span class="p">(</span><span class="n">H</span><span class="p">,</span> <span class="n">W_hq</span><span class="p">)</span> <span class="o">+</span> <span class="n">b_q</span>
+        <span class="n">outputs</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">Y</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">torch</span><span class="o">.</span><span class="n">cat</span><span class="p">(</span><span class="n">outputs</span><span class="p">,</span> <span class="n">dim</span><span class="o">=</span><span class="mi">0</span><span class="p">),</span> <span class="p">(</span><span class="n">H</span><span class="p">,)</span>
+</code></pre></div>
+
+<p>With all the needed functions being defined,
+next we <strong>create a class to wrap these functions and store parameters</strong> for an RNN model implemented from scratch.</p>
+<div class="codehilite"><pre><span></span><code><span class="k">class</span> <span class="nc">RNNModelScratch</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;A RNN Model implemented from scratch.&quot;&quot;&quot;</span>
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">vocab_size</span><span class="p">,</span> <span class="n">num_hiddens</span><span class="p">,</span> <span class="n">device</span><span class="p">,</span> <span class="n">get_params</span><span class="p">,</span>
+                 <span class="n">init_state</span><span class="p">,</span> <span class="n">forward_fn</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">vocab_size</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">num_hiddens</span> <span class="o">=</span> <span class="n">vocab_size</span><span class="p">,</span> <span class="n">num_hiddens</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">params</span> <span class="o">=</span> <span class="n">get_params</span><span class="p">(</span><span class="n">vocab_size</span><span class="p">,</span> <span class="n">num_hiddens</span><span class="p">,</span> <span class="n">device</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">init_state</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">forward_fn</span> <span class="o">=</span> <span class="n">init_state</span><span class="p">,</span> <span class="n">forward_fn</span>
+
+    <span class="k">def</span> <span class="fm">__call__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">X</span><span class="p">,</span> <span class="n">state</span><span class="p">):</span>
+        <span class="n">X</span> <span class="o">=</span> <span class="n">F</span><span class="o">.</span><span class="n">one_hot</span><span class="p">(</span><span class="n">X</span><span class="o">.</span><span class="n">T</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">vocab_size</span><span class="p">)</span><span class="o">.</span><span class="n">type</span><span class="p">(</span><span class="n">torch</span><span class="o">.</span><span class="n">float32</span><span class="p">)</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">forward_fn</span><span class="p">(</span><span class="n">X</span><span class="p">,</span> <span class="n">state</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">begin_state</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">batch_size</span><span class="p">,</span> <span class="n">device</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">init_state</span><span class="p">(</span><span class="n">batch_size</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">num_hiddens</span><span class="p">,</span> <span class="n">device</span><span class="p">)</span>
+</code></pre></div>
+
+<p>Let us <strong>check whether the outputs have the correct shapes</strong>, e.g., to ensure that the dimensionality of the hidden state remains unchanged.</p>
+<div class="codehilite"><pre><span></span><code><span class="n">num_hiddens</span> <span class="o">=</span> <span class="mi">512</span>
+<span class="n">net</span> <span class="o">=</span> <span class="n">RNNModelScratch</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">vocab</span><span class="p">),</span> <span class="n">num_hiddens</span><span class="p">,</span> <span class="n">d2l</span><span class="o">.</span><span class="n">try_gpu</span><span class="p">(),</span> <span class="n">get_params</span><span class="p">,</span>
+                      <span class="n">init_rnn_state</span><span class="p">,</span> <span class="n">rnn</span><span class="p">)</span>
+<span class="n">state</span> <span class="o">=</span> <span class="n">net</span><span class="o">.</span><span class="n">begin_state</span><span class="p">(</span><span class="n">X</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">d2l</span><span class="o">.</span><span class="n">try_gpu</span><span class="p">())</span>
+<span class="n">Y</span><span class="p">,</span> <span class="n">new_state</span> <span class="o">=</span> <span class="n">net</span><span class="p">(</span><span class="n">X</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="n">d2l</span><span class="o">.</span><span class="n">try_gpu</span><span class="p">()),</span> <span class="n">state</span><span class="p">)</span>
+<span class="n">Y</span><span class="o">.</span><span class="n">shape</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">new_state</span><span class="p">),</span> <span class="n">new_state</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">shape</span>
+</code></pre></div>
+
+<div class="codehilite"><pre><span></span><code>(torch.Size([10, 28]), 1, torch.Size([2, 512]))
+</code></pre></div>
+
+<p>We can see that the output shape is (number of time steps $\times$ batch size, vocabulary size), while the hidden state shape remains the same, i.e., (batch size, number of hidden units).</p>
+<h2>Prediction</h2>
+<p>Let us <strong>first define the prediction function
+to generate new characters following
+the user-provided <code>prefix</code></strong>,
+which is a string containing several characters.
+When looping through these beginning characters in <code>prefix</code>,
+we keep passing the hidden state
+to the next time step without
+generating any output.
+This is called the <em>warm-up</em> period,
+during which the model updates itself
+(e.g., update the hidden state)
+but does not make predictions.
+After the warm-up period,
+the hidden state is generally better than
+its initialized value at the beginning.
+So we generate the predicted characters and emit them.</p>
+<div class="codehilite"><pre><span></span><code><span class="k">def</span> <span class="nf">predict_ch8</span><span class="p">(</span><span class="n">prefix</span><span class="p">,</span> <span class="n">num_preds</span><span class="p">,</span> <span class="n">net</span><span class="p">,</span> <span class="n">vocab</span><span class="p">,</span> <span class="n">device</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Generate new characters following the `prefix`.&quot;&quot;&quot;</span>
+    <span class="n">state</span> <span class="o">=</span> <span class="n">net</span><span class="o">.</span><span class="n">begin_state</span><span class="p">(</span><span class="n">batch_size</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">device</span><span class="o">=</span><span class="n">device</span><span class="p">)</span>
+    <span class="n">outputs</span> <span class="o">=</span> <span class="p">[</span><span class="n">vocab</span><span class="p">[</span><span class="n">prefix</span><span class="p">[</span><span class="mi">0</span><span class="p">]]]</span>
+    <span class="n">get_input</span> <span class="o">=</span> <span class="k">lambda</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">tensor</span><span class="p">([</span><span class="n">outputs</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]],</span> <span class="n">device</span><span class="o">=</span><span class="n">device</span><span class="p">)</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span>
+        <span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">))</span>
+    <span class="k">for</span> <span class="n">y</span> <span class="ow">in</span> <span class="n">prefix</span><span class="p">[</span><span class="mi">1</span><span class="p">:]:</span>  <span class="c1"># Warm-up period</span>
+        <span class="n">_</span><span class="p">,</span> <span class="n">state</span> <span class="o">=</span> <span class="n">net</span><span class="p">(</span><span class="n">get_input</span><span class="p">(),</span> <span class="n">state</span><span class="p">)</span>
+        <span class="n">outputs</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">vocab</span><span class="p">[</span><span class="n">y</span><span class="p">])</span>
+    <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">num_preds</span><span class="p">):</span>  <span class="c1"># Predict `num_preds` steps</span>
+        <span class="n">y</span><span class="p">,</span> <span class="n">state</span> <span class="o">=</span> <span class="n">net</span><span class="p">(</span><span class="n">get_input</span><span class="p">(),</span> <span class="n">state</span><span class="p">)</span>
+        <span class="n">outputs</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="nb">int</span><span class="p">(</span><span class="n">y</span><span class="o">.</span><span class="n">argmax</span><span class="p">(</span><span class="n">dim</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="mi">1</span><span class="p">)))</span>
+    <span class="k">return</span> <span class="s1">&#39;&#39;</span><span class="o">.</span><span class="n">join</span><span class="p">([</span><span class="n">vocab</span><span class="o">.</span><span class="n">idx_to_token</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">outputs</span><span class="p">])</span>
+</code></pre></div>
+
+<p>Now we can test the <code>predict_ch8</code> function.
+We specify the prefix as <code>time traveller</code> and have it generate 10 additional characters.
+Given that we have not trained the network,
+it will generate nonsensical predictions.</p>
+<div class="codehilite"><pre><span></span><code><span class="n">predict_ch8</span><span class="p">(</span><span class="s1">&#39;time traveller &#39;</span><span class="p">,</span> <span class="mi">10</span><span class="p">,</span> <span class="n">net</span><span class="p">,</span> <span class="n">vocab</span><span class="p">,</span> <span class="n">d2l</span><span class="o">.</span><span class="n">try_gpu</span><span class="p">())</span>
+</code></pre></div>
+
+<div class="codehilite"><pre><span></span><code>&#39;time traveller q&lt;unk&gt;vrslf&lt;unk&gt;vr&#39;
+</code></pre></div>
+
+<h2><strong>Gradient Clipping</strong></h2>
+<p>For a sequence of length $T$,
+we compute the gradients over these $T$ time steps in an iteration, which results in a chain of matrix-products with length  $\mathcal{O}(T)$ during backpropagation.
+As mentioned before, it might result in numerical instability, e.g., the gradients may either explode or vanish, when $T$ is large. Therefore, RNN models often need extra help to stabilize the training.</p>
+<p>Generally speaking,
+when solving an optimization problem,
+we take update steps for the model parameter,
+say in the vector form
+$\mathbf{x}$,
+in the direction of the negative gradient $\mathbf{g}$ on a minibatch.
+For example,
+with $\eta &gt; 0$ as the learning rate,
+in one iteration we update
+$\mathbf{x}$
+as $\mathbf{x} - \eta \mathbf{g}$.
+Let us further assume that the objective function $f$
+is well behaved, say, <em>Lipschitz continuous</em> with constant $L$.
+That is to say,
+for any $\mathbf{x}$ and $\mathbf{y}$ we have</p>
+<p>$$|f(\mathbf{x}) - f(\mathbf{y})| \leq L |\mathbf{x} - \mathbf{y}|.$$</p>
+<p>In this case we can safely assume that if we update the parameter vector by $\eta \mathbf{g}$, then</p>
+<p>$$|f(\mathbf{x}) - f(\mathbf{x} - \eta\mathbf{g})| \leq L \eta|\mathbf{g}|,$$</p>
+<p>which means that
+we will not observe a change by more than $L \eta |\mathbf{g}|$. This is both a curse and a blessing.
+On the curse side,
+it limits the speed of making progress;
+whereas on the blessing side,
+it limits the extent to which things can go wrong if we move in the wrong direction.</p>
+<p>Sometimes the gradients can be quite large and the optimization algorithm may fail to converge. We could address this by reducing the learning rate $\eta$. But what if we only <em>rarely</em> get large gradients? In this case such an approach may appear entirely unwarranted. One popular alternative is to clip the gradient $\mathbf{g}$ by projecting them back to a ball of a given radius, say $\theta$ via</p>
+<p><strong>$$\mathbf{g} \leftarrow \min\left(1, \frac{\theta}{|\mathbf{g}|}\right) \mathbf{g}.$$</strong></p>
+<p>By doing so we know that the gradient norm never exceeds $\theta$ and that the
+updated gradient is entirely aligned with the original direction of $\mathbf{g}$.
+It also has the desirable side-effect of limiting the influence any given
+minibatch (and within it any given sample) can exert on the parameter vector. This
+bestows a certain degree of robustness to the model. Gradient clipping provides
+a quick fix to the gradient exploding. While it does not entirely solve the problem, it is one of the many techniques to alleviate it.</p>
+<p>Below we define a function to clip the gradients of
+a model that is implemented from scratch or a model constructed by the high-level APIs.
+Also note that we compute the gradient norm over all the model parameters.</p>
+<div class="codehilite"><pre><span></span><code><span class="k">def</span> <span class="nf">grad_clipping</span><span class="p">(</span><span class="n">net</span><span class="p">,</span> <span class="n">theta</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Clip the gradient.&quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">net</span><span class="p">,</span> <span class="n">nn</span><span class="o">.</span><span class="n">Module</span><span class="p">):</span>
+        <span class="n">params</span> <span class="o">=</span> <span class="p">[</span><span class="n">p</span> <span class="k">for</span> <span class="n">p</span> <span class="ow">in</span> <span class="n">net</span><span class="o">.</span><span class="n">parameters</span><span class="p">()</span> <span class="k">if</span> <span class="n">p</span><span class="o">.</span><span class="n">requires_grad</span><span class="p">]</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">params</span> <span class="o">=</span> <span class="n">net</span><span class="o">.</span><span class="n">params</span>
+    <span class="n">norm</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">sqrt</span><span class="p">(</span><span class="nb">sum</span><span class="p">(</span><span class="n">torch</span><span class="o">.</span><span class="n">sum</span><span class="p">((</span><span class="n">p</span><span class="o">.</span><span class="n">grad</span><span class="o">**</span><span class="mi">2</span><span class="p">))</span> <span class="k">for</span> <span class="n">p</span> <span class="ow">in</span> <span class="n">params</span><span class="p">))</span>
+    <span class="k">if</span> <span class="n">norm</span> <span class="o">&gt;</span> <span class="n">theta</span><span class="p">:</span>
+        <span class="k">for</span> <span class="n">param</span> <span class="ow">in</span> <span class="n">params</span><span class="p">:</span>
+            <span class="n">param</span><span class="o">.</span><span class="n">grad</span><span class="p">[:]</span> <span class="o">*=</span> <span class="n">theta</span> <span class="o">/</span> <span class="n">norm</span>
+</code></pre></div>
+
+<h2>Training</h2>
+<p>Before training the model,
+let us <strong>define a function to train the model in one epoch</strong>. It differs from how we train the model of softmax from the scratch in three places:</p>
+<ol>
+<li>Different sampling methods for sequential data (random sampling and sequential partitioning) will result in differences in the initialization of hidden states.</li>
+<li>We clip the gradients before updating the model parameters. This ensures that the model does not diverge even when gradients blow up at some point during the training process.</li>
+<li>We use perplexity to evaluate the model. As discussed before, this ensures that sequences of different length are comparable.</li>
+</ol>
+<p>Specifically,
+when sequential partitioning is used, we initialize the hidden state only at the beginning of each epoch.
+Since the $i^\mathrm{th}$ subsequence example  in the next minibatch is adjacent to the current $i^\mathrm{th}$ subsequence example,
+the hidden state at the end of the current minibatch
+will be
+used to initialize
+the hidden state at the beginning of the next minibatch.
+In this way,
+historical information of the sequence
+stored in the hidden state
+might flow over
+adjacent subsequences within an epoch.
+However, the computation of the hidden state
+at any point depends on all the previous minibatches
+in the same epoch,
+which complicates the gradient computation.
+To reduce computational cost,
+we detach the gradient before processing any minibatch
+so that the gradient computation of the hidden state
+is always limited to
+the time steps in one minibatch. </p>
+<p>When using the random sampling,
+we need to re-initialize the hidden state for each iteration since each example is sampled with a random position.
+Same as the <code>train_epoch_ch3</code> function in softmax from the scratch,
+<code>updater</code> is a general function
+to update the model parameters.
+It can be either the <code>d2l.sgd</code> function implemented from scratch or the built-in optimization function in
+a deep learning framework.</p>
+<div class="codehilite"><pre><span></span><code><span class="k">def</span> <span class="nf">train_epoch_ch8</span><span class="p">(</span><span class="n">net</span><span class="p">,</span> <span class="n">train_iter</span><span class="p">,</span> <span class="n">loss</span><span class="p">,</span> <span class="n">updater</span><span class="p">,</span> <span class="n">device</span><span class="p">,</span> <span class="n">use_random_iter</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Train a net within one epoch (defined in Chapter 8).&quot;&quot;&quot;</span>
+    <span class="n">state</span><span class="p">,</span> <span class="n">timer</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">d2l</span><span class="o">.</span><span class="n">Timer</span><span class="p">()</span>
+    <span class="n">metric</span> <span class="o">=</span> <span class="n">d2l</span><span class="o">.</span><span class="n">Accumulator</span><span class="p">(</span><span class="mi">2</span><span class="p">)</span>  <span class="c1"># Sum of training loss, no. of tokens</span>
+    <span class="k">for</span> <span class="n">X</span><span class="p">,</span> <span class="n">Y</span> <span class="ow">in</span> <span class="n">train_iter</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">state</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">or</span> <span class="n">use_random_iter</span><span class="p">:</span>
+            <span class="c1"># Initialize `state` when either it is the first iteration or</span>
+            <span class="c1"># using random sampling</span>
+            <span class="n">state</span> <span class="o">=</span> <span class="n">net</span><span class="o">.</span><span class="n">begin_state</span><span class="p">(</span><span class="n">batch_size</span><span class="o">=</span><span class="n">X</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">device</span><span class="o">=</span><span class="n">device</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">net</span><span class="p">,</span> <span class="n">nn</span><span class="o">.</span><span class="n">Module</span><span class="p">)</span> <span class="ow">and</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">state</span><span class="p">,</span> <span class="nb">tuple</span><span class="p">):</span>
+                <span class="c1"># `state` is a tensor for `nn.GRU`</span>
+                <span class="n">state</span><span class="o">.</span><span class="n">detach_</span><span class="p">()</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="c1"># `state` is a tuple of tensors for `nn.LSTM` and</span>
+                <span class="c1"># for our custom scratch implementation</span>
+                <span class="k">for</span> <span class="n">s</span> <span class="ow">in</span> <span class="n">state</span><span class="p">:</span>
+                    <span class="n">s</span><span class="o">.</span><span class="n">detach_</span><span class="p">()</span>
+        <span class="n">y</span> <span class="o">=</span> <span class="n">Y</span><span class="o">.</span><span class="n">T</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">)</span>
+        <span class="n">X</span><span class="p">,</span> <span class="n">y</span> <span class="o">=</span> <span class="n">X</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="n">device</span><span class="p">),</span> <span class="n">y</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="n">device</span><span class="p">)</span>
+        <span class="n">y_hat</span><span class="p">,</span> <span class="n">state</span> <span class="o">=</span> <span class="n">net</span><span class="p">(</span><span class="n">X</span><span class="p">,</span> <span class="n">state</span><span class="p">)</span>
+        <span class="n">l</span> <span class="o">=</span> <span class="n">loss</span><span class="p">(</span><span class="n">y_hat</span><span class="p">,</span> <span class="n">y</span><span class="o">.</span><span class="n">long</span><span class="p">())</span><span class="o">.</span><span class="n">mean</span><span class="p">()</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">updater</span><span class="p">,</span> <span class="n">torch</span><span class="o">.</span><span class="n">optim</span><span class="o">.</span><span class="n">Optimizer</span><span class="p">):</span>
+            <span class="n">updater</span><span class="o">.</span><span class="n">zero_grad</span><span class="p">()</span>
+            <span class="n">l</span><span class="o">.</span><span class="n">backward</span><span class="p">()</span>
+            <span class="n">grad_clipping</span><span class="p">(</span><span class="n">net</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+            <span class="n">updater</span><span class="o">.</span><span class="n">step</span><span class="p">()</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">l</span><span class="o">.</span><span class="n">backward</span><span class="p">()</span>
+            <span class="n">grad_clipping</span><span class="p">(</span><span class="n">net</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+            <span class="c1"># Since the `mean` function has been invoked</span>
+            <span class="n">updater</span><span class="p">(</span><span class="n">batch_size</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+        <span class="n">metric</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">l</span> <span class="o">*</span> <span class="n">y</span><span class="o">.</span><span class="n">numel</span><span class="p">(),</span> <span class="n">y</span><span class="o">.</span><span class="n">numel</span><span class="p">())</span>
+    <span class="k">return</span> <span class="n">math</span><span class="o">.</span><span class="n">exp</span><span class="p">(</span><span class="n">metric</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">/</span> <span class="n">metric</span><span class="p">[</span><span class="mi">1</span><span class="p">]),</span> <span class="n">metric</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">/</span> <span class="n">timer</span><span class="o">.</span><span class="n">stop</span><span class="p">()</span>
+</code></pre></div>
+
+<p><strong>The training function supports
+an RNN model implemented
+either from scratch
+or using high-level APIs.</strong></p>
+<div class="codehilite"><pre><span></span><code><span class="k">def</span> <span class="nf">train_ch8</span><span class="p">(</span><span class="n">net</span><span class="p">,</span> <span class="n">train_iter</span><span class="p">,</span> <span class="n">vocab</span><span class="p">,</span> <span class="n">lr</span><span class="p">,</span> <span class="n">num_epochs</span><span class="p">,</span> <span class="n">device</span><span class="p">,</span>
+              <span class="n">use_random_iter</span><span class="o">=</span><span class="kc">False</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Train a model (defined in Chapter 8).&quot;&quot;&quot;</span>
+    <span class="n">loss</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">CrossEntropyLoss</span><span class="p">()</span>
+    <span class="n">animator</span> <span class="o">=</span> <span class="n">d2l</span><span class="o">.</span><span class="n">Animator</span><span class="p">(</span><span class="n">xlabel</span><span class="o">=</span><span class="s1">&#39;epoch&#39;</span><span class="p">,</span> <span class="n">ylabel</span><span class="o">=</span><span class="s1">&#39;perplexity&#39;</span><span class="p">,</span>
+                            <span class="n">legend</span><span class="o">=</span><span class="p">[</span><span class="s1">&#39;train&#39;</span><span class="p">],</span> <span class="n">xlim</span><span class="o">=</span><span class="p">[</span><span class="mi">10</span><span class="p">,</span> <span class="n">num_epochs</span><span class="p">])</span>
+    <span class="c1"># Initialize</span>
+    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">net</span><span class="p">,</span> <span class="n">nn</span><span class="o">.</span><span class="n">Module</span><span class="p">):</span>
+        <span class="n">updater</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">optim</span><span class="o">.</span><span class="n">SGD</span><span class="p">(</span><span class="n">net</span><span class="o">.</span><span class="n">parameters</span><span class="p">(),</span> <span class="n">lr</span><span class="p">)</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">updater</span> <span class="o">=</span> <span class="k">lambda</span> <span class="n">batch_size</span><span class="p">:</span> <span class="n">d2l</span><span class="o">.</span><span class="n">sgd</span><span class="p">(</span><span class="n">net</span><span class="o">.</span><span class="n">params</span><span class="p">,</span> <span class="n">lr</span><span class="p">,</span> <span class="n">batch_size</span><span class="p">)</span>
+    <span class="n">predict</span> <span class="o">=</span> <span class="k">lambda</span> <span class="n">prefix</span><span class="p">:</span> <span class="n">predict_ch8</span><span class="p">(</span><span class="n">prefix</span><span class="p">,</span> <span class="mi">50</span><span class="p">,</span> <span class="n">net</span><span class="p">,</span> <span class="n">vocab</span><span class="p">,</span> <span class="n">device</span><span class="p">)</span>
+    <span class="c1"># Train and predict</span>
+    <span class="k">for</span> <span class="n">epoch</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">num_epochs</span><span class="p">):</span>
+        <span class="n">ppl</span><span class="p">,</span> <span class="n">speed</span> <span class="o">=</span> <span class="n">train_epoch_ch8</span><span class="p">(</span><span class="n">net</span><span class="p">,</span> <span class="n">train_iter</span><span class="p">,</span> <span class="n">loss</span><span class="p">,</span> <span class="n">updater</span><span class="p">,</span> <span class="n">device</span><span class="p">,</span>
+                                     <span class="n">use_random_iter</span><span class="p">)</span>
+        <span class="k">if</span> <span class="p">(</span><span class="n">epoch</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span> <span class="o">%</span> <span class="mi">10</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="nb">print</span><span class="p">(</span><span class="n">predict</span><span class="p">(</span><span class="s1">&#39;time traveller&#39;</span><span class="p">))</span>
+            <span class="n">animator</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">epoch</span> <span class="o">+</span> <span class="mi">1</span><span class="p">,</span> <span class="p">[</span><span class="n">ppl</span><span class="p">])</span>
+    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;perplexity </span><span class="si">{</span><span class="n">ppl</span><span class="si">:</span><span class="s1">.1f</span><span class="si">}</span><span class="s1">, </span><span class="si">{</span><span class="n">speed</span><span class="si">:</span><span class="s1">.1f</span><span class="si">}</span><span class="s1"> tokens/sec on </span><span class="si">{</span><span class="nb">str</span><span class="p">(</span><span class="n">device</span><span class="p">)</span><span class="si">}</span><span class="s1">&#39;</span><span class="p">)</span>
+    <span class="nb">print</span><span class="p">(</span><span class="n">predict</span><span class="p">(</span><span class="s1">&#39;time traveller&#39;</span><span class="p">))</span>
+    <span class="nb">print</span><span class="p">(</span><span class="n">predict</span><span class="p">(</span><span class="s1">&#39;traveller&#39;</span><span class="p">))</span>
+</code></pre></div>
+
+<p><strong>Now we can train the RNN model.</strong>
+Since we only use 10000 tokens in the dataset, the model needs more epochs to converge better.</p>
+<div class="codehilite"><pre><span></span><code><span class="n">num_epochs</span><span class="p">,</span> <span class="n">lr</span> <span class="o">=</span> <span class="mi">500</span><span class="p">,</span> <span class="mi">1</span>
+<span class="n">train_ch8</span><span class="p">(</span><span class="n">net</span><span class="p">,</span> <span class="n">train_iter</span><span class="p">,</span> <span class="n">vocab</span><span class="p">,</span> <span class="n">lr</span><span class="p">,</span> <span class="n">num_epochs</span><span class="p">,</span> <span class="n">d2l</span><span class="o">.</span><span class="n">try_gpu</span><span class="p">())</span>
+</code></pre></div>
+
+<div class="codehilite"><pre><span></span><code><span class="nv">perplexity</span><span class="w"> </span><span class="mi">1</span>.<span class="mi">0</span>,<span class="w"> </span><span class="mi">18493</span>.<span class="mi">4</span><span class="w"> </span><span class="nv">tokens</span><span class="o">/</span><span class="nv">sec</span><span class="w"> </span><span class="nv">on</span><span class="w"> </span><span class="nv">cpu</span>
+<span class="nv">time</span><span class="w"> </span><span class="nv">traveller</span><span class="w"> </span><span class="k">for</span><span class="w"> </span><span class="nv">so</span><span class="w"> </span><span class="nv">it</span><span class="w"> </span><span class="nv">will</span><span class="w"> </span><span class="nv">be</span><span class="w"> </span><span class="nv">convenient</span><span class="w"> </span><span class="nv">to</span><span class="w"> </span><span class="nv">speak</span><span class="w"> </span><span class="nv">of</span><span class="w"> </span><span class="nv">himwas</span><span class="w"> </span><span class="nv">e</span>
+<span class="nv">traveller</span><span class="w"> </span><span class="nv">with</span><span class="w"> </span><span class="nv">a</span><span class="w"> </span><span class="nv">slight</span><span class="w"> </span><span class="nv">accession</span><span class="w"> </span><span class="nv">ofcheerfulness</span><span class="w"> </span><span class="nv">really</span><span class="w"> </span><span class="nv">thi</span>
+</code></pre></div>
+
+<p><img alt="svg" src="output_28_1.svg" /></p>
+<p><strong>Finally,
+let us check the results of using the random sampling method.</strong></p>
+<div class="codehilite"><pre><span></span><code><span class="n">net</span> <span class="o">=</span> <span class="n">RNNModelScratch</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">vocab</span><span class="p">),</span> <span class="n">num_hiddens</span><span class="p">,</span> <span class="n">d2l</span><span class="o">.</span><span class="n">try_gpu</span><span class="p">(),</span> <span class="n">get_params</span><span class="p">,</span>
+                      <span class="n">init_rnn_state</span><span class="p">,</span> <span class="n">rnn</span><span class="p">)</span>
+<span class="n">train_ch8</span><span class="p">(</span><span class="n">net</span><span class="p">,</span> <span class="n">train_iter</span><span class="p">,</span> <span class="n">vocab</span><span class="p">,</span> <span class="n">lr</span><span class="p">,</span> <span class="n">num_epochs</span><span class="p">,</span> <span class="n">d2l</span><span class="o">.</span><span class="n">try_gpu</span><span class="p">(),</span>
+          <span class="n">use_random_iter</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+</code></pre></div>
+
+<div class="codehilite"><pre><span></span><code>perplexity 1.5, 19198.5 tokens/sec on cpu
+time travellerit s against reason said filbywha that same av il 
+travellerit s against reason said filbywha that same av il
+</code></pre></div>
+
+<p><img alt="svg" src="output_30_1.svg" /></p>
+<p>While implementing the above RNN model from scratch is instructive, it is not convenient.
+In the next section we will see how to improve the RNN model,
+such as how to make it easier to implement
+and make it run faster.</p>
+<h2>Summary</h2>
+<ul>
+<li>We can train an RNN-based character-level language model to generate text following the user-provided text prefix.</li>
+<li>A simple RNN language model consists of input encoding, RNN modeling, and output generation.</li>
+<li>RNN models need state initialization for training, though random sampling and sequential partitioning use different ways.</li>
+<li>When using sequential partitioning, we need to detach the gradient to reduce computational cost.</li>
+<li>A warm-up period allows a model to update itself (e.g., obtain a better hidden state than its initialized value) before making any prediction.</li>
+<li>Gradient clipping prevents gradient explosion, but it cannot fix vanishing gradients.</li>
+</ul>
+<h2>Exercises</h2>
+<ol>
+<li>
+<p>Run the code in this section without clipping the gradient. What happens?</p>
+</li>
+<li>
+<p>Change the structure of the RNN and try to improve the results (or get earlier convergence)</p>
+</li>
+</ol>
+<p><a href="https://discuss.d2l.ai/t/486">Discussions</a></p>
+</body>
+</html>

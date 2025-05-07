@@ -1,0 +1,462 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8"/>
+  <title>Data_Manipulation_exercises.ipynb</title>
+</head>
+<body>
+<h1>Data Manipulation</h1>
+<p>In order to get anything done, we need some way to store and manipulate data.
+Generally, there are two important things we need to do with data: (i) acquire
+them; and (ii) process them once they are inside the computer.  There is no
+point in acquiring data without some way to store it, so let us get our hands
+dirty first by playing with synthetic data.  To start, we introduce the
+$n$-dimensional array, which is also called the <em>tensor</em>.</p>
+<p>If you have worked with NumPy, the most widely-used
+scientific computing package in Python,
+then you will find this section familiar.
+No matter which framework you use,
+its <em>tensor class</em> (<code>ndarray</code> in MXNet,
+<code>Tensor</code> in both PyTorch and TensorFlow) is similar to NumPy's <code>ndarray</code> with
+a few killer features.
+First, GPU is well-supported to accelerate the computation
+whereas NumPy only supports CPU computation.
+Second, the tensor class
+supports automatic differentiation.
+These properties make the tensor class suitable for deep learning.
+Throughout the book, when we say tensors,
+we are referring to instances of the tensor class unless otherwise stated.</p>
+<h2>Getting Started</h2>
+<p>In this section, we aim to get you up and running,
+equipping you with the basic math and numerical computing tools
+that you will build on as you progress through the book.
+Do not worry if you struggle to grok some of
+the mathematical concepts or library functions.
+The following sections will revisit this material
+in the context of practical examples and it will sink in.
+On the other hand, if you already have some background
+and want to go deeper into the mathematical content, just skip this section.</p>
+<p>(<strong>To start, we import <code>torch</code>. Note that though it's called PyTorch, we should
+import <code>torch</code> instead of <code>pytorch</code>.</strong>)</p>
+<div class="codehilite"><pre><span></span><code><span class="kn">import</span> <span class="nn">torch</span>
+</code></pre></div>
+
+<p>[<strong>A tensor represents a (possibly multi-dimensional) array of numerical values.</strong>]
+With one axis, a tensor corresponds (in math) to a <em>vector</em>.
+With two axes, a tensor corresponds to a <em>matrix</em>.
+Tensors with more than two axes do not have special
+mathematical names.</p>
+<p>To start, we can use <code>arange</code> to create a row vector <code>x</code>
+containing the first 12 integers starting with 0,
+though they are created as floats by default.
+Each of the values in a tensor is called an <em>element</em> of the tensor.
+For instance, there are 12 elements in the tensor <code>x</code>.
+Unless otherwise specified, a new tensor
+will be stored in main memory and designated for CPU-based computation.</p>
+<div class="codehilite"><pre><span></span><code><span class="n">x</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="mi">12</span><span class="p">)</span>
+<span class="n">x</span>
+</code></pre></div>
+
+<div class="codehilite"><pre><span></span><code>tensor([ 0,  1,  2,  3,  4,  5,  6,  7,  8,  9, 10, 11])
+</code></pre></div>
+
+<p>(<strong>We can access a tensor's <em>shape</em></strong>) (~~and the total number of elements~~) (the length along each axis)
+by inspecting its <code>shape</code> property.</p>
+<div class="codehilite"><pre><span></span><code><span class="n">x</span><span class="o">.</span><span class="n">shape</span>
+</code></pre></div>
+
+<div class="codehilite"><pre><span></span><code>torch.Size([12])
+</code></pre></div>
+
+<p>If we just want to know the total number of elements in a tensor,
+i.e., the product of all of the shape elements,
+we can inspect its size.
+Because we are dealing with a vector here,
+the single element of its <code>shape</code> is identical to its size.</p>
+<div class="codehilite"><pre><span></span><code><span class="n">x</span><span class="o">.</span><span class="n">numel</span><span class="p">()</span>
+</code></pre></div>
+
+<div class="codehilite"><pre><span></span><code><span class="mf">12</span>
+</code></pre></div>
+
+<p>To [<strong>change the shape of a tensor without altering
+either the number of elements or their values</strong>],
+we can invoke the <code>reshape</code> function.
+For example, we can transform our tensor, <code>x</code>,
+from a row vector with shape (12,) to a matrix with shape (3, 4).
+This new tensor contains the exact same values,
+but views them as a matrix organized as 3 rows and 4 columns.
+To reiterate, although the shape has changed,
+the elements have not.
+Note that the size is unaltered by reshaping.</p>
+<div class="codehilite"><pre><span></span><code><span class="n">X</span> <span class="o">=</span> <span class="n">x</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="mi">3</span><span class="p">,</span> <span class="mi">4</span><span class="p">)</span>
+<span class="n">X</span>
+</code></pre></div>
+
+<div class="codehilite"><pre><span></span><code>tensor([[ 0,  1,  2,  3],
+        [ 4,  5,  6,  7],
+        [ 8,  9, 10, 11]])
+</code></pre></div>
+
+<p>Reshaping by manually specifying every dimension is unnecessary.
+If our target shape is a matrix with shape (height, width),
+then after we know the width, the height is given implicitly.
+Why should we have to perform the division ourselves?
+In the example above, to get a matrix with 3 rows,
+we specified both that it should have 3 rows and 4 columns.
+Fortunately, tensors can automatically work out one dimension given the rest.
+We invoke this capability by placing <code>-1</code> for the dimension
+that we would like tensors to automatically infer.
+In our case, instead of calling <code>x.reshape(3, 4)</code>,
+we could have equivalently called <code>x.reshape(-1, 4)</code> or <code>x.reshape(3, -1)</code>.</p>
+<p>Typically, we will want our matrices initialized
+either with zeros, ones, some other constants,
+or numbers randomly sampled from a specific distribution.
+[<strong>We can create a tensor representing a tensor with all elements
+set to 0</strong>] (~~or 1~~)
+and a shape of (2, 3, 4) as follows:</p>
+<div class="codehilite"><pre><span></span><code><span class="n">torch</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="mi">2</span><span class="p">,</span> <span class="mi">3</span><span class="p">,</span> <span class="mi">4</span><span class="p">))</span>
+</code></pre></div>
+
+<div class="codehilite"><pre><span></span><code>tensor([[[0., 0., 0., 0.],
+         [0., 0., 0., 0.],
+         [0., 0., 0., 0.]],
+
+        [[0., 0., 0., 0.],
+         [0., 0., 0., 0.],
+         [0., 0., 0., 0.]]])
+</code></pre></div>
+
+<p>Similarly, we can create tensors with each element set to 1 as follows:</p>
+<div class="codehilite"><pre><span></span><code><span class="n">torch</span><span class="o">.</span><span class="n">ones</span><span class="p">((</span><span class="mi">2</span><span class="p">,</span> <span class="mi">3</span><span class="p">,</span> <span class="mi">4</span><span class="p">))</span>
+</code></pre></div>
+
+<div class="codehilite"><pre><span></span><code>tensor([[[1., 1., 1., 1.],
+         [1., 1., 1., 1.],
+         [1., 1., 1., 1.]],
+
+        [[1., 1., 1., 1.],
+         [1., 1., 1., 1.],
+         [1., 1., 1., 1.]]])
+</code></pre></div>
+
+<p>Often, we want to [<strong>randomly sample the values
+for each element in a tensor</strong>]
+from some probability distribution.
+For example, when we construct arrays to serve
+as parameters in a neural network, we will
+typically initialize their values randomly.
+The following snippet creates a tensor with shape (3, 4).
+Each of its elements is randomly sampled
+from a standard Gaussian (normal) distribution
+with a mean of 0 and a standard deviation of 1.</p>
+<div class="codehilite"><pre><span></span><code><span class="n">torch</span><span class="o">.</span><span class="n">randn</span><span class="p">(</span><span class="mi">3</span><span class="p">,</span> <span class="mi">4</span><span class="p">)</span>
+</code></pre></div>
+
+<div class="codehilite"><pre><span></span><code>tensor([[ 1.2070,  0.1862,  0.6951, -0.2583],
+        [ 1.6610,  0.6281,  0.9251,  1.1376],
+        [-0.8538,  1.2907, -0.9933, -0.1209]])
+</code></pre></div>
+
+<p>We can also [<strong>specify the exact values for each element</strong>] in the desired tensor
+by supplying a Python list (or list of lists) containing the numerical values.
+Here, the outermost list corresponds to axis 0, and the inner list to axis 1.</p>
+<div class="codehilite"><pre><span></span><code><span class="n">torch</span><span class="o">.</span><span class="n">tensor</span><span class="p">([[</span><span class="mi">2</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">4</span><span class="p">,</span> <span class="mi">3</span><span class="p">],</span> <span class="p">[</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">3</span><span class="p">,</span> <span class="mi">4</span><span class="p">],</span> <span class="p">[</span><span class="mi">4</span><span class="p">,</span> <span class="mi">3</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">1</span><span class="p">]])</span>
+</code></pre></div>
+
+<div class="codehilite"><pre><span></span><code>tensor([[2, 1, 4, 3],
+        [1, 2, 3, 4],
+        [4, 3, 2, 1]])
+</code></pre></div>
+
+<h2>Operations</h2>
+<p>This book is not about software engineering.
+Our interests are not limited to simply
+reading and writing data from/to arrays.
+We want to perform mathematical operations on those arrays.
+Some of the simplest and most useful operations
+are the <em>elementwise</em> operations.
+These apply a standard scalar operation
+to each element of an array.
+For functions that take two arrays as inputs,
+elementwise operations apply some standard binary operator
+on each pair of corresponding elements from the two arrays.
+We can create an elementwise function from any function
+that maps from a scalar to a scalar.</p>
+<p>In mathematical notation, we would denote such
+a <em>unary</em> scalar operator (taking one input)
+by the signature $f: \mathbb{R} \rightarrow \mathbb{R}$.
+This just means that the function is mapping
+from any real number ($\mathbb{R}$) onto another.
+Likewise, we denote a <em>binary</em> scalar operator
+(taking two real inputs, and yielding one output)
+by the signature $f: \mathbb{R}, \mathbb{R} \rightarrow \mathbb{R}$.
+Given any two vectors $\mathbf{u}$ and $\mathbf{v}$ <em>of the same shape</em>,
+and a binary operator $f$, we can produce a vector
+$\mathbf{c} = F(\mathbf{u},\mathbf{v})$
+by setting $c_i \gets f(u_i, v_i)$ for all $i$,
+where $c_i, u_i$, and $v_i$ are the $i^\mathrm{th}$ elements
+of vectors $\mathbf{c}, \mathbf{u}$, and $\mathbf{v}$.
+Here, we produced the vector-valued
+$F: \mathbb{R}^d, \mathbb{R}^d \rightarrow \mathbb{R}^d$
+by <em>lifting</em> the scalar function to an elementwise vector operation.</p>
+<p>The common standard arithmetic operators
+(<code>+</code>, <code>-</code>, <code>*</code>, <code>/</code>, and <code>**</code>)
+have all been <em>lifted</em> to elementwise operations
+for any identically-shaped tensors of arbitrary shape.
+We can call elementwise operations on any two tensors of the same shape.
+In the following example, we use commas to formulate a 5-element tuple,
+where each element is the result of an elementwise operation.</p>
+<h3>Operations</h3>
+<p>[<strong>The common standard arithmetic operators
+(<code>+</code>, <code>-</code>, <code>*</code>, <code>/</code>, and <code>**</code>)
+have all been <em>lifted</em> to elementwise operations.</strong>]</p>
+<div class="codehilite"><pre><span></span><code><span class="n">x</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">tensor</span><span class="p">([</span><span class="mf">1.0</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">4</span><span class="p">,</span> <span class="mi">8</span><span class="p">])</span>
+<span class="n">y</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">tensor</span><span class="p">([</span><span class="mi">2</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">2</span><span class="p">])</span>
+<span class="n">x</span> <span class="o">+</span> <span class="n">y</span><span class="p">,</span> <span class="n">x</span> <span class="o">-</span> <span class="n">y</span><span class="p">,</span> <span class="n">x</span> <span class="o">*</span> <span class="n">y</span><span class="p">,</span> <span class="n">x</span> <span class="o">/</span> <span class="n">y</span><span class="p">,</span> <span class="n">x</span><span class="o">**</span><span class="n">y</span>  <span class="c1"># The ** operator is exponentiation</span>
+</code></pre></div>
+
+<div class="codehilite"><pre><span></span><code>(tensor([ 3.,  4.,  6., 10.]),
+ tensor([-1.,  0.,  2.,  6.]),
+ tensor([ 2.,  4.,  8., 16.]),
+ tensor([0.5000, 1.0000, 2.0000, 4.0000]),
+ tensor([ 1.,  4., 16., 64.]))
+</code></pre></div>
+
+<p>Many (<strong>more operations can be applied elementwise</strong>),
+including unary operators like exponentiation.</p>
+<div class="codehilite"><pre><span></span><code><span class="n">torch</span><span class="o">.</span><span class="n">exp</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
+</code></pre></div>
+
+<div class="codehilite"><pre><span></span><code>tensor([2.7183e+00, 7.3891e+00, 5.4598e+01, 2.9810e+03])
+</code></pre></div>
+
+<p>In addition to elementwise computations,
+we can also perform linear algebra operations,
+including vector dot products and matrix multiplication.
+We will explain the crucial bits of linear algebra
+(with no assumed prior knowledge) in :numref:<code>sec_linear-algebra</code>.</p>
+<p>We can also [<strong><em>concatenate</em> multiple tensors together,</strong>]
+stacking them end-to-end to form a larger tensor.
+We just need to provide a list of tensors
+and tell the system along which axis to concatenate.
+The example below shows what happens when we concatenate
+two matrices along rows (axis 0, the first element of the shape)
+vs. columns (axis 1, the second element of the shape).
+We can see that the first output tensor's axis-0 length ($6$)
+is the sum of the two input tensors' axis-0 lengths ($3 + 3$);
+while the second output tensor's axis-1 length ($8$)
+is the sum of the two input tensors' axis-1 lengths ($4 + 4$).</p>
+<div class="codehilite"><pre><span></span><code><span class="n">X</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="mi">12</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">torch</span><span class="o">.</span><span class="n">float32</span><span class="p">)</span><span class="o">.</span><span class="n">reshape</span><span class="p">((</span><span class="mi">3</span><span class="p">,</span> <span class="mi">4</span><span class="p">))</span>
+<span class="n">Y</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">tensor</span><span class="p">([[</span><span class="mf">2.0</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">4</span><span class="p">,</span> <span class="mi">3</span><span class="p">],</span> <span class="p">[</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">3</span><span class="p">,</span> <span class="mi">4</span><span class="p">],</span> <span class="p">[</span><span class="mi">4</span><span class="p">,</span> <span class="mi">3</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">1</span><span class="p">]])</span>
+<span class="n">torch</span><span class="o">.</span><span class="n">cat</span><span class="p">((</span><span class="n">X</span><span class="p">,</span> <span class="n">Y</span><span class="p">),</span> <span class="n">dim</span><span class="o">=</span><span class="mi">0</span><span class="p">),</span> <span class="n">torch</span><span class="o">.</span><span class="n">cat</span><span class="p">((</span><span class="n">X</span><span class="p">,</span> <span class="n">Y</span><span class="p">),</span> <span class="n">dim</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+</code></pre></div>
+
+<div class="codehilite"><pre><span></span><code>(tensor([[ 0.,  1.,  2.,  3.],
+         [ 4.,  5.,  6.,  7.],
+         [ 8.,  9., 10., 11.],
+         [ 2.,  1.,  4.,  3.],
+         [ 1.,  2.,  3.,  4.],
+         [ 4.,  3.,  2.,  1.]]),
+ tensor([[ 0.,  1.,  2.,  3.,  2.,  1.,  4.,  3.],
+         [ 4.,  5.,  6.,  7.,  1.,  2.,  3.,  4.],
+         [ 8.,  9., 10., 11.,  4.,  3.,  2.,  1.]]))
+</code></pre></div>
+
+<p>Sometimes, we want to [<strong>construct a binary tensor via <em>logical statements</em>.</strong>]
+Take <code>X == Y</code> as an example.
+For each position, if <code>X</code> and <code>Y</code> are equal at that position,
+the corresponding entry in the new tensor takes a value of 1,
+meaning that the logical statement <code>X == Y</code> is true at that position;
+otherwise that position takes 0.</p>
+<div class="codehilite"><pre><span></span><code><span class="n">X</span> <span class="o">&lt;</span> <span class="n">Y</span>
+</code></pre></div>
+
+<div class="codehilite"><pre><span></span><code>tensor([[ True, False,  True, False],
+        [False, False, False, False],
+        [False, False, False, False]])
+</code></pre></div>
+
+<p>[<strong>Summing all the elements in the tensor</strong>] yields a tensor with only one element.</p>
+<div class="codehilite"><pre><span></span><code><span class="n">X</span><span class="o">.</span><span class="n">sum</span><span class="p">()</span>
+</code></pre></div>
+
+<div class="codehilite"><pre><span></span><code>tensor(66.)
+</code></pre></div>
+
+<h2>Broadcasting Mechanism</h2>
+<p>:label:<code>subsec_broadcasting</code></p>
+<p>In the above section, we saw how to perform elementwise operations
+on two tensors of the same shape. Under certain conditions,
+even when shapes differ, we can still [<strong>perform elementwise operations
+by invoking the <em>broadcasting mechanism</em>.</strong>]
+This mechanism works in the following way:
+First, expand one or both arrays
+by copying elements appropriately
+so that after this transformation,
+the two tensors have the same shape.
+Second, carry out the elementwise operations
+on the resulting arrays.</p>
+<p>In most cases, we broadcast along an axis where an array
+initially only has length 1, such as in the following example:</p>
+<div class="codehilite"><pre><span></span><code><span class="n">a</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="mi">3</span><span class="p">)</span><span class="o">.</span><span class="n">reshape</span><span class="p">((</span><span class="mi">3</span><span class="p">,</span> <span class="mi">1</span><span class="p">))</span>
+<span class="n">b</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="mi">2</span><span class="p">)</span><span class="o">.</span><span class="n">reshape</span><span class="p">((</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">))</span>
+<span class="n">a</span><span class="p">,</span> <span class="n">b</span>
+</code></pre></div>
+
+<div class="codehilite"><pre><span></span><code>(tensor([[0],
+         [1],
+         [2]]),
+ tensor([[0, 1]]))
+</code></pre></div>
+
+<p>Since <code>a</code> and <code>b</code> are $3\times1$ and $1\times2$ matrices respectively,
+their shapes do not match up if we want to add them.
+We <em>broadcast</em> the entries of both matrices into a larger $3\times2$ matrix as follows:
+for matrix <code>a</code> it replicates the columns
+and for matrix <code>b</code> it replicates the rows
+before adding up both elementwise.</p>
+<div class="codehilite"><pre><span></span><code><span class="n">a</span> <span class="o">+</span> <span class="n">b</span>
+</code></pre></div>
+
+<div class="codehilite"><pre><span></span><code>tensor([[0, 1],
+        [1, 2],
+        [2, 3]])
+</code></pre></div>
+
+<h2>Indexing and Slicing</h2>
+<p>Just as in any other Python array, elements in a tensor can be accessed by index.
+As in any Python array, the first element has index 0
+and ranges are specified to include the first but <em>before</em> the last element.
+As in standard Python lists, we can access elements
+according to their relative position to the end of the list
+by using negative indices.</p>
+<p>Thus, [<strong><code>[-1]</code> selects the last element and <code>[1:3]</code>
+selects the second and the third elements</strong>] as follows:</p>
+<div class="codehilite"><pre><span></span><code><span class="n">X</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">],</span> <span class="n">X</span><span class="p">[</span><span class="mi">1</span><span class="p">:</span><span class="mi">3</span><span class="p">]</span>
+</code></pre></div>
+
+<div class="codehilite"><pre><span></span><code>(tensor([ 8.,  9., 10., 11.]),
+ tensor([[ 4.,  5.,  6.,  7.],
+         [ 8.,  9., 10., 11.]]))
+</code></pre></div>
+
+<p>Beyond reading, (<strong>we can also write elements of a matrix by specifying indices.</strong>)</p>
+<div class="codehilite"><pre><span></span><code><span class="n">X</span><span class="p">[</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">]</span> <span class="o">=</span> <span class="mi">9</span>
+<span class="n">X</span>
+</code></pre></div>
+
+<div class="codehilite"><pre><span></span><code>tensor([[ 0.,  1.,  2.,  3.],
+        [ 4.,  5.,  9.,  7.],
+        [ 8.,  9., 10., 11.]])
+</code></pre></div>
+
+<p>If we want [<strong>to assign multiple elements the same value,
+we simply index all of them and then assign them the value.</strong>]
+For instance, <code>[0:2, :]</code> accesses the first and second rows,
+where <code>:</code> takes all the elements along axis 1 (column).
+While we discussed indexing for matrices,
+this obviously also works for vectors
+and for tensors of more than 2 dimensions.</p>
+<div class="codehilite"><pre><span></span><code><span class="n">X</span><span class="p">[</span><span class="mi">0</span><span class="p">:</span><span class="mi">2</span><span class="p">,</span> <span class="p">:]</span> <span class="o">=</span> <span class="mi">12</span>
+<span class="n">X</span>
+</code></pre></div>
+
+<div class="codehilite"><pre><span></span><code>tensor([[12., 12., 12., 12.],
+        [12., 12., 12., 12.],
+        [ 8.,  9., 10., 11.]])
+</code></pre></div>
+
+<h2>Saving Memory</h2>
+<p>[<strong>Running operations can cause new memory to be
+allocated to host results.</strong>]
+For example, if we write <code>Y = X + Y</code>,
+we will dereference the tensor that <code>Y</code> used to point to
+and instead point <code>Y</code> at the newly allocated memory.
+In the following example, we demonstrate this with Python's <code>id()</code> function,
+which gives us the exact address of the referenced object in memory.
+After running <code>Y = Y + X</code>, we will find that <code>id(Y)</code> points to a different location.
+That is because Python first evaluates <code>Y + X</code>,
+allocating new memory for the result and then makes <code>Y</code>
+point to this new location in memory.</p>
+<div class="codehilite"><pre><span></span><code><span class="n">before</span> <span class="o">=</span> <span class="nb">id</span><span class="p">(</span><span class="n">Y</span><span class="p">)</span>
+<span class="n">Y</span> <span class="o">=</span> <span class="n">Y</span> <span class="o">+</span> <span class="n">X</span>
+<span class="nb">id</span><span class="p">(</span><span class="n">Y</span><span class="p">)</span> <span class="o">==</span> <span class="n">before</span>
+</code></pre></div>
+
+<div class="codehilite"><pre><span></span><code>False
+</code></pre></div>
+
+<p>This might be undesirable for two reasons.
+First, we do not want to run around
+allocating memory unnecessarily all the time.
+In machine learning, we might have
+hundreds of megabytes of parameters
+and update all of them multiple times per second.
+Typically, we will want to perform these updates <em>in place</em>.
+Second, we might point at the same parameters from multiple variables.
+If we do not update in place, other references will still point to
+the old memory location, making it possible for parts of our code
+to inadvertently reference stale parameters.</p>
+<p>Fortunately, (<strong>performing in-place operations</strong>) is easy.
+We can assign the result of an operation
+to a previously allocated array with slice notation,
+e.g., <code>Y[:] = &lt;expression&gt;</code>.
+To illustrate this concept, we first create a new matrix <code>Z</code>
+with the same shape as another <code>Y</code>,
+using <code>zeros_like</code> to allocate a block of $0$ entries.</p>
+<div class="codehilite"><pre><span></span><code><span class="n">Z</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">zeros_like</span><span class="p">(</span><span class="n">Y</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="s1">&#39;id(Z):&#39;</span><span class="p">,</span> <span class="nb">id</span><span class="p">(</span><span class="n">Z</span><span class="p">))</span>
+<span class="n">Z</span><span class="p">[:]</span> <span class="o">=</span> <span class="n">X</span> <span class="o">+</span> <span class="n">Y</span>
+<span class="nb">print</span><span class="p">(</span><span class="s1">&#39;id(Z):&#39;</span><span class="p">,</span> <span class="nb">id</span><span class="p">(</span><span class="n">Z</span><span class="p">))</span>
+</code></pre></div>
+
+<div class="codehilite"><pre><span></span><code>id(Z): 4845488400
+id(Z): 4845488400
+</code></pre></div>
+
+<p>[<strong>If the value of <code>X</code> is not reused in subsequent computations,
+we can also use <code>X[:] = X + Y</code> or <code>X += Y</code>
+to reduce the memory overhead of the operation.</strong>]</p>
+<div class="codehilite"><pre><span></span><code><span class="n">before</span> <span class="o">=</span> <span class="nb">id</span><span class="p">(</span><span class="n">X</span><span class="p">)</span>
+<span class="n">X</span> <span class="o">+=</span> <span class="n">Y</span>
+<span class="nb">id</span><span class="p">(</span><span class="n">X</span><span class="p">)</span> <span class="o">==</span> <span class="n">before</span>
+</code></pre></div>
+
+<div class="codehilite"><pre><span></span><code>True
+</code></pre></div>
+
+<h2>Conversion to Other Python Objects</h2>
+<p>[<strong>Converting to a NumPy tensor (<code>ndarray</code>)</strong>], or vice versa, is easy.
+The torch Tensor and numpy array will share their underlying memory
+locations, and changing one through an in-place operation will also
+change the other.</p>
+<div class="codehilite"><pre><span></span><code><span class="n">A</span> <span class="o">=</span> <span class="n">X</span><span class="o">.</span><span class="n">numpy</span><span class="p">()</span>
+<span class="n">B</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">from_numpy</span><span class="p">(</span><span class="n">A</span><span class="p">)</span>
+<span class="nb">type</span><span class="p">(</span><span class="n">A</span><span class="p">),</span> <span class="nb">type</span><span class="p">(</span><span class="n">B</span><span class="p">)</span>
+</code></pre></div>
+
+<div class="codehilite"><pre><span></span><code>(numpy.ndarray, torch.Tensor)
+</code></pre></div>
+
+<p>To (<strong>convert a size-1 tensor to a Python scalar</strong>),
+we can invoke the <code>item</code> function or Python's built-in functions.</p>
+<div class="codehilite"><pre><span></span><code><span class="n">a</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">tensor</span><span class="p">([</span><span class="mf">3.5</span><span class="p">])</span>
+<span class="n">a</span><span class="p">,</span> <span class="n">a</span><span class="o">.</span><span class="n">item</span><span class="p">(),</span> <span class="nb">float</span><span class="p">(</span><span class="n">a</span><span class="p">),</span> <span class="nb">int</span><span class="p">(</span><span class="n">a</span><span class="p">)</span>
+</code></pre></div>
+
+<div class="codehilite"><pre><span></span><code>(tensor([3.5000]), 3.5, 3.5, 3)
+</code></pre></div>
+
+<h2>Summary</h2>
+<ul>
+<li>The main interface to store and manipulate data for deep learning is the tensor ($n$-dimensional array). It provides a variety of functionalities including basic mathematics operations, broadcasting, indexing, slicing, memory saving, and conversion to other Python objects.</li>
+</ul>
+<p><strong>2 Exercises of chapter one (Deep Learning Course)</strong></p>
+<p>a) Create a tensor $X$ with the numbers (0, ..., 23) of shape(3,4,2)</p>
+<p>b) Compare the .shape and the .numel() function by applying them to $X$. What is the difference between them?</p>
+<p>c) Get all elements of the first two indices of the second axis of $X$</p>
+<p>d) Get the square root of all elements of $X$ by using the sqrt() function</p>
+<p><a href="https://discuss.d2l.ai/t/27">Discussions</a></p>
+</body>
+</html>

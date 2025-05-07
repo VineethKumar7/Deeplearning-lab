@@ -1,0 +1,368 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8"/>
+  <title>lenet_Exercises.ipynb</title>
+</head>
+<body>
+<h1>Convolutional Neural Networks (LeNet)</h1>
+<p>We now have all the ingredients required to assemble
+a fully-functional CNN.
+In our earlier encounter with image data,
+we applied
+a softmax regression model 
+and
+an MLP model 
+to pictures of clothing in the Fashion-MNIST dataset.
+To make such data amenable to softmax regression and MLPs,
+we first flattened each image from a $28\times28$ matrix
+into a fixed-length $784$-dimensional vector,
+and thereafter processed them with fully-connected layers.
+Now that we have a handle on convolutional layers,
+we can retain the spatial structure in our images.
+As an additional benefit of replacing fully-connected layers with convolutional layers,
+we will enjoy more parsimonious models that require far fewer parameters.</p>
+<p>In this section, we will introduce <em>LeNet</em>,
+among the first published CNNs
+to capture wide attention for its performance on computer vision tasks.
+The model was introduced by (and named for) Yann LeCun,
+then a researcher at AT&amp;T Bell Labs,
+for the purpose of recognizing handwritten digits in images.
+This work represented the culmination
+of a decade of research developing the technology.
+In 1989, LeCun published the first study to successfully
+train CNNs via backpropagation.</p>
+<p>At the time LeNet achieved outstanding results
+matching the performance of support vector machines,
+then a dominant approach in supervised learning.
+LeNet was eventually adapted to recognize digits
+for processing deposits in ATM machines.
+To this day, some ATMs still run the code
+that Yann and his colleague Leon Bottou wrote in the 1990s!</p>
+<h2>LeNet</h2>
+<p>At a high level, <strong>LeNet (LeNet-5) consists of two parts:
+(i) a convolutional encoder consisting of two convolutional layers; and
+(ii) a dense block consisting of three fully-connected layers</strong>;
+The architecture is summarized in figure 6.6.1 (https://d2l.ai/chapter_convolutional-neural-networks/lenet.html).</p>
+<p>The basic units in each convolutional block
+are a convolutional layer, a sigmoid activation function,
+and a subsequent average pooling operation.
+Note that while ReLUs and max-pooling work better,
+these discoveries had not yet been made in the 1990s.
+Each convolutional layer uses a $5\times 5$ kernel
+and a sigmoid activation function.
+These layers map spatially arranged inputs
+to a number of two-dimensional feature maps, typically
+increasing the number of channels.
+The first convolutional layer has 6 output channels,
+while the second has 16.
+Each $2\times2$ pooling operation (stride 2)
+reduces dimensionality by a factor of $4$ via spatial downsampling.
+The convolutional block emits an output with shape given by
+(batch size, number of channel, height, width).</p>
+<p>In order to pass output from the convolutional block
+to the dense block,
+we must flatten each example in the minibatch.
+In other words, we take this four-dimensional input and transform it
+into the two-dimensional input expected by fully-connected layers:
+as a reminder, the two-dimensional representation that we desire uses the first dimension to index examples in the minibatch
+and the second to give the flat vector representation of each example.
+LeNet's dense block has three fully-connected layers,
+with 120, 84, and 10 outputs, respectively.
+Because we are still performing classification,
+the 10-dimensional output layer corresponds
+to the number of possible output classes.</p>
+<p>While getting to the point where you truly understand
+what is going on inside LeNet may have taken a bit of work,
+hopefully the following code snippet will convince you
+that implementing such models with modern deep learning frameworks
+is remarkably simple.
+We need only to instantiate a <code>Sequential</code> block
+and chain together the appropriate layers.</p>
+<div class="codehilite"><pre><span></span><code><span class="c1"># You need the following line of code only if you use google colab</span>
+
+<span class="err">!</span> <span class="n">pip</span> <span class="n">install</span> <span class="n">d2l</span>
+<span class="kn">import</span> <span class="nn">torch</span>
+<span class="kn">from</span> <span class="nn">torch</span> <span class="kn">import</span> <span class="n">nn</span>
+<span class="kn">from</span> <span class="nn">d2l</span> <span class="kn">import</span> <span class="n">torch</span> <span class="k">as</span> <span class="n">d2l</span>
+
+<span class="n">net</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">Sequential</span><span class="p">(</span><span class="n">nn</span><span class="o">.</span><span class="n">Conv2d</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">6</span><span class="p">,</span> <span class="n">kernel_size</span><span class="o">=</span><span class="mi">5</span><span class="p">,</span> <span class="n">padding</span><span class="o">=</span><span class="mi">2</span><span class="p">),</span> <span class="n">nn</span><span class="o">.</span><span class="n">Sigmoid</span><span class="p">(),</span>
+                    <span class="n">nn</span><span class="o">.</span><span class="n">AvgPool2d</span><span class="p">(</span><span class="n">kernel_size</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">stride</span><span class="o">=</span><span class="mi">2</span><span class="p">),</span>
+                    <span class="n">nn</span><span class="o">.</span><span class="n">Conv2d</span><span class="p">(</span><span class="mi">6</span><span class="p">,</span> <span class="mi">16</span><span class="p">,</span> <span class="n">kernel_size</span><span class="o">=</span><span class="mi">5</span><span class="p">),</span> <span class="n">nn</span><span class="o">.</span><span class="n">Sigmoid</span><span class="p">(),</span>
+                    <span class="n">nn</span><span class="o">.</span><span class="n">AvgPool2d</span><span class="p">(</span><span class="n">kernel_size</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">stride</span><span class="o">=</span><span class="mi">2</span><span class="p">),</span> <span class="n">nn</span><span class="o">.</span><span class="n">Flatten</span><span class="p">(),</span>
+                    <span class="n">nn</span><span class="o">.</span><span class="n">Linear</span><span class="p">(</span><span class="mi">16</span> <span class="o">*</span> <span class="mi">5</span> <span class="o">*</span> <span class="mi">5</span><span class="p">,</span> <span class="mi">120</span><span class="p">),</span> <span class="n">nn</span><span class="o">.</span><span class="n">Sigmoid</span><span class="p">(),</span>
+                    <span class="n">nn</span><span class="o">.</span><span class="n">Linear</span><span class="p">(</span><span class="mi">120</span><span class="p">,</span> <span class="mi">84</span><span class="p">),</span> <span class="n">nn</span><span class="o">.</span><span class="n">Sigmoid</span><span class="p">(),</span> <span class="n">nn</span><span class="o">.</span><span class="n">Linear</span><span class="p">(</span><span class="mi">84</span><span class="p">,</span> <span class="mi">10</span><span class="p">))</span>
+</code></pre></div>
+
+<div class="codehilite"><pre><span></span><code><span class="n">Collecting</span><span class="w"> </span><span class="n">d2l</span>
+<span class="w">  </span><span class="n">Downloading</span><span class="w"> </span><span class="n">d2l</span><span class="o">-</span><span class="mf">0.17</span><span class="o">.</span><span class="mi">0</span><span class="o">-</span><span class="n">py3</span><span class="o">-</span><span class="n">none</span><span class="o">-</span><span class="n">any</span><span class="o">.</span><span class="n">whl</span><span class="w"> </span><span class="p">(</span><span class="mi">83</span><span class="w"> </span><span class="n">kB</span><span class="p">)</span>
+<span class="err"></span><span class="p">[</span><span class="err">?</span><span class="mi">25</span><span class="n">l</span>
+</code></pre></div>
+
+<p>[K     |████                            | 10 kB 9.8 MB/s eta 0:00:01
+[K     |███████▉                        | 20 kB 13.1 MB/s eta 0:00:01
+[K     |███████████▉                    | 30 kB 14.8 MB/s eta 0:00:01
+[K     |███████████████▊                | 40 kB 17.5 MB/s eta 0:00:01
+[K     |███████████████████▊            | 51 kB 20.1 MB/s eta 0:00:01
+[K     |███████████████████████▋        | 61 kB 22.9 MB/s eta 0:00:01
+[K     |███████████████████████████▋    | 71 kB 24.2 MB/s eta 0:00:01
+[K     |███████████████████████████████▌| 81 kB 26.3 MB/s eta 0:00:01
+[K     |████████████████████████████████| 83 kB 1.9 MB/s 
+    [?25hRequirement already satisfied: requests in /usr/local/lib/python3.7/dist-packages (from d2l) (2.23.0)
+    Requirement already satisfied: pandas in /usr/local/lib/python3.7/dist-packages (from d2l) (1.1.5)
+    Requirement already satisfied: jupyter in /usr/local/lib/python3.7/dist-packages (from d2l) (1.0.0)
+    Requirement already satisfied: matplotlib in /usr/local/lib/python3.7/dist-packages (from d2l) (3.2.2)
+    Requirement already satisfied: numpy in /usr/local/lib/python3.7/dist-packages (from d2l) (1.19.5)
+    Requirement already satisfied: qtconsole in /usr/local/lib/python3.7/dist-packages (from jupyter-&gt;d2l) (5.2.0)
+    Requirement already satisfied: nbconvert in /usr/local/lib/python3.7/dist-packages (from jupyter-&gt;d2l) (5.6.1)
+    Requirement already satisfied: jupyter-console in /usr/local/lib/python3.7/dist-packages (from jupyter-&gt;d2l) (5.2.0)
+    Requirement already satisfied: ipykernel in /usr/local/lib/python3.7/dist-packages (from jupyter-&gt;d2l) (4.10.1)
+    Requirement already satisfied: ipywidgets in /usr/local/lib/python3.7/dist-packages (from jupyter-&gt;d2l) (7.6.5)
+    Requirement already satisfied: notebook in /usr/local/lib/python3.7/dist-packages (from jupyter-&gt;d2l) (5.3.1)
+    Requirement already satisfied: traitlets&gt;=4.1.0 in /usr/local/lib/python3.7/dist-packages (from ipykernel-&gt;jupyter-&gt;d2l) (5.1.1)
+    Requirement already satisfied: ipython&gt;=4.0.0 in /usr/local/lib/python3.7/dist-packages (from ipykernel-&gt;jupyter-&gt;d2l) (5.5.0)
+    Requirement already satisfied: tornado&gt;=4.0 in /usr/local/lib/python3.7/dist-packages (from ipykernel-&gt;jupyter-&gt;d2l) (5.1.1)
+    Requirement already satisfied: jupyter-client in /usr/local/lib/python3.7/dist-packages (from ipykernel-&gt;jupyter-&gt;d2l) (5.3.5)
+    Requirement already satisfied: pexpect in /usr/local/lib/python3.7/dist-packages (from ipython&gt;=4.0.0-&gt;ipykernel-&gt;jupyter-&gt;d2l) (4.8.0)
+    Requirement already satisfied: decorator in /usr/local/lib/python3.7/dist-packages (from ipython&gt;=4.0.0-&gt;ipykernel-&gt;jupyter-&gt;d2l) (4.4.2)
+    Requirement already satisfied: simplegeneric&gt;0.8 in /usr/local/lib/python3.7/dist-packages (from ipython&gt;=4.0.0-&gt;ipykernel-&gt;jupyter-&gt;d2l) (0.8.1)
+    Requirement already satisfied: prompt-toolkit&lt;2.0.0,&gt;=1.0.4 in /usr/local/lib/python3.7/dist-packages (from ipython&gt;=4.0.0-&gt;ipykernel-&gt;jupyter-&gt;d2l) (1.0.18)
+    Requirement already satisfied: setuptools&gt;=18.5 in /usr/local/lib/python3.7/dist-packages (from ipython&gt;=4.0.0-&gt;ipykernel-&gt;jupyter-&gt;d2l) (57.4.0)
+    Requirement already satisfied: pickleshare in /usr/local/lib/python3.7/dist-packages (from ipython&gt;=4.0.0-&gt;ipykernel-&gt;jupyter-&gt;d2l) (0.7.5)
+    Requirement already satisfied: pygments in /usr/local/lib/python3.7/dist-packages (from ipython&gt;=4.0.0-&gt;ipykernel-&gt;jupyter-&gt;d2l) (2.6.1)
+    Requirement already satisfied: wcwidth in /usr/local/lib/python3.7/dist-packages (from prompt-toolkit&lt;2.0.0,&gt;=1.0.4-&gt;ipython&gt;=4.0.0-&gt;ipykernel-&gt;jupyter-&gt;d2l) (0.2.5)
+    Requirement already satisfied: six&gt;=1.9.0 in /usr/local/lib/python3.7/dist-packages (from prompt-toolkit&lt;2.0.0,&gt;=1.0.4-&gt;ipython&gt;=4.0.0-&gt;ipykernel-&gt;jupyter-&gt;d2l) (1.15.0)
+    Requirement already satisfied: ipython-genutils~=0.2.0 in /usr/local/lib/python3.7/dist-packages (from ipywidgets-&gt;jupyter-&gt;d2l) (0.2.0)
+    Requirement already satisfied: jupyterlab-widgets&gt;=1.0.0 in /usr/local/lib/python3.7/dist-packages (from ipywidgets-&gt;jupyter-&gt;d2l) (1.0.2)
+    Requirement already satisfied: widgetsnbextension~=3.5.0 in /usr/local/lib/python3.7/dist-packages (from ipywidgets-&gt;jupyter-&gt;d2l) (3.5.2)
+    Requirement already satisfied: nbformat&gt;=4.2.0 in /usr/local/lib/python3.7/dist-packages (from ipywidgets-&gt;jupyter-&gt;d2l) (5.1.3)
+    Requirement already satisfied: jsonschema!=2.5.0,&gt;=2.4 in /usr/local/lib/python3.7/dist-packages (from nbformat&gt;=4.2.0-&gt;ipywidgets-&gt;jupyter-&gt;d2l) (2.6.0)
+    Requirement already satisfied: jupyter-core in /usr/local/lib/python3.7/dist-packages (from nbformat&gt;=4.2.0-&gt;ipywidgets-&gt;jupyter-&gt;d2l) (4.9.1)
+    Requirement already satisfied: Send2Trash in /usr/local/lib/python3.7/dist-packages (from notebook-&gt;jupyter-&gt;d2l) (1.8.0)
+    Requirement already satisfied: terminado&gt;=0.8.1 in /usr/local/lib/python3.7/dist-packages (from notebook-&gt;jupyter-&gt;d2l) (0.12.1)
+    Requirement already satisfied: jinja2 in /usr/local/lib/python3.7/dist-packages (from notebook-&gt;jupyter-&gt;d2l) (2.11.3)
+    Requirement already satisfied: python-dateutil&gt;=2.1 in /usr/local/lib/python3.7/dist-packages (from jupyter-client-&gt;ipykernel-&gt;jupyter-&gt;d2l) (2.8.2)
+    Requirement already satisfied: pyzmq&gt;=13 in /usr/local/lib/python3.7/dist-packages (from jupyter-client-&gt;ipykernel-&gt;jupyter-&gt;d2l) (22.3.0)
+    Requirement already satisfied: ptyprocess in /usr/local/lib/python3.7/dist-packages (from terminado&gt;=0.8.1-&gt;notebook-&gt;jupyter-&gt;d2l) (0.7.0)
+    Requirement already satisfied: MarkupSafe&gt;=0.23 in /usr/local/lib/python3.7/dist-packages (from jinja2-&gt;notebook-&gt;jupyter-&gt;d2l) (2.0.1)
+    Requirement already satisfied: cycler&gt;=0.10 in /usr/local/lib/python3.7/dist-packages (from matplotlib-&gt;d2l) (0.11.0)
+    Requirement already satisfied: kiwisolver&gt;=1.0.1 in /usr/local/lib/python3.7/dist-packages (from matplotlib-&gt;d2l) (1.3.2)
+    Requirement already satisfied: pyparsing!=2.0.4,!=2.1.2,!=2.1.6,&gt;=2.0.1 in /usr/local/lib/python3.7/dist-packages (from matplotlib-&gt;d2l) (2.4.7)
+    Requirement already satisfied: entrypoints&gt;=0.2.2 in /usr/local/lib/python3.7/dist-packages (from nbconvert-&gt;jupyter-&gt;d2l) (0.3)
+    Requirement already satisfied: bleach in /usr/local/lib/python3.7/dist-packages (from nbconvert-&gt;jupyter-&gt;d2l) (4.1.0)
+    Requirement already satisfied: mistune&lt;2,&gt;=0.8.1 in /usr/local/lib/python3.7/dist-packages (from nbconvert-&gt;jupyter-&gt;d2l) (0.8.4)
+    Requirement already satisfied: pandocfilters&gt;=1.4.1 in /usr/local/lib/python3.7/dist-packages (from nbconvert-&gt;jupyter-&gt;d2l) (1.5.0)
+    Requirement already satisfied: defusedxml in /usr/local/lib/python3.7/dist-packages (from nbconvert-&gt;jupyter-&gt;d2l) (0.7.1)
+    Requirement already satisfied: testpath in /usr/local/lib/python3.7/dist-packages (from nbconvert-&gt;jupyter-&gt;d2l) (0.5.0)
+    Requirement already satisfied: webencodings in /usr/local/lib/python3.7/dist-packages (from bleach-&gt;nbconvert-&gt;jupyter-&gt;d2l) (0.5.1)
+    Requirement already satisfied: packaging in /usr/local/lib/python3.7/dist-packages (from bleach-&gt;nbconvert-&gt;jupyter-&gt;d2l) (21.2)
+    Requirement already satisfied: pytz&gt;=2017.2 in /usr/local/lib/python3.7/dist-packages (from pandas-&gt;d2l) (2018.9)
+    Requirement already satisfied: qtpy in /usr/local/lib/python3.7/dist-packages (from qtconsole-&gt;jupyter-&gt;d2l) (1.11.2)
+    Requirement already satisfied: chardet&lt;4,&gt;=3.0.2 in /usr/local/lib/python3.7/dist-packages (from requests-&gt;d2l) (3.0.4)
+    Requirement already satisfied: urllib3!=1.25.0,!=1.25.1,&lt;1.26,&gt;=1.21.1 in /usr/local/lib/python3.7/dist-packages (from requests-&gt;d2l) (1.24.3)
+    Requirement already satisfied: certifi&gt;=2017.4.17 in /usr/local/lib/python3.7/dist-packages (from requests-&gt;d2l) (2021.10.8)
+    Requirement already satisfied: idna&lt;3,&gt;=2.5 in /usr/local/lib/python3.7/dist-packages (from requests-&gt;d2l) (2.10)
+    Installing collected packages: d2l
+    Successfully installed d2l-0.17.0</p>
+<p>We took a small liberty with the original model,
+removing the Gaussian activation in the final layer.
+Other than that, this network matches
+the original LeNet-5 architecture.</p>
+<p>By passing a single-channel (black and white)
+$28 \times 28$ image through the network
+and printing the output shape at each layer,
+we can <strong>inspect the model</strong> to make sure
+that its operations line up with
+what we expect from figure 6.6.2</p>
+<div class="codehilite"><pre><span></span><code><span class="n">X</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">rand</span><span class="p">(</span><span class="n">size</span><span class="o">=</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">28</span><span class="p">,</span> <span class="mi">28</span><span class="p">),</span> <span class="n">dtype</span><span class="o">=</span><span class="n">torch</span><span class="o">.</span><span class="n">float32</span><span class="p">)</span>
+<span class="k">for</span> <span class="n">layer</span> <span class="ow">in</span> <span class="n">net</span><span class="p">:</span>
+    <span class="n">X</span> <span class="o">=</span> <span class="n">layer</span><span class="p">(</span><span class="n">X</span><span class="p">)</span>
+    <span class="nb">print</span><span class="p">(</span><span class="n">layer</span><span class="o">.</span><span class="vm">__class__</span><span class="o">.</span><span class="vm">__name__</span><span class="p">,</span> <span class="s1">&#39;output shape: </span><span class="se">\t</span><span class="s1">&#39;</span><span class="p">,</span> <span class="n">X</span><span class="o">.</span><span class="n">shape</span><span class="p">)</span>
+</code></pre></div>
+
+<div class="codehilite"><pre><span></span><code>Conv2d output shape:     torch.Size([1, 6, 28, 28])
+Sigmoid output shape:    torch.Size([1, 6, 28, 28])
+AvgPool2d output shape:      torch.Size([1, 6, 14, 14])
+Conv2d output shape:     torch.Size([1, 16, 10, 10])
+Sigmoid output shape:    torch.Size([1, 16, 10, 10])
+AvgPool2d output shape:      torch.Size([1, 16, 5, 5])
+Flatten output shape:    torch.Size([1, 400])
+Linear output shape:     torch.Size([1, 120])
+Sigmoid output shape:    torch.Size([1, 120])
+Linear output shape:     torch.Size([1, 84])
+Sigmoid output shape:    torch.Size([1, 84])
+Linear output shape:     torch.Size([1, 10])
+</code></pre></div>
+
+<p>Note that the height and width of the representation
+at each layer throughout the convolutional block
+is reduced (compared with the previous layer).
+The first convolutional layer uses 2 pixels of padding
+to compensate for the reduction in height and width
+that would otherwise result from using a $5 \times 5$ kernel.
+In contrast, the second convolutional layer forgoes padding,
+and thus the height and width are both reduced by 4 pixels.
+As we go up the stack of layers,
+the number of channels increases layer-over-layer
+from 1 in the input to 6 after the first convolutional layer
+and 16 after the second convolutional layer.
+However, each pooling layer halves the height and width.
+Finally, each fully-connected layer reduces dimensionality,
+finally emitting an output whose dimension
+matches the number of classes.</p>
+<h2>Training</h2>
+<p>Now that we have implemented the model,
+let us <strong>run an experiment to see how LeNet fares on Fashion-MNIST</strong>.</p>
+<div class="codehilite"><pre><span></span><code><span class="n">batch_size</span> <span class="o">=</span> <span class="mi">256</span>
+<span class="n">train_iter</span><span class="p">,</span> <span class="n">test_iter</span> <span class="o">=</span> <span class="n">d2l</span><span class="o">.</span><span class="n">load_data_fashion_mnist</span><span class="p">(</span><span class="n">batch_size</span><span class="o">=</span><span class="n">batch_size</span><span class="p">)</span>
+</code></pre></div>
+
+<div class="codehilite"><pre><span></span><code><span class="n">Downloading</span><span class="w"> </span><span class="n">http</span><span class="p">:</span><span class="o">//</span><span class="n">fashion</span><span class="o">-</span><span class="n">mnist</span><span class="o">.</span><span class="n">s3</span><span class="o">-</span><span class="n">website</span><span class="o">.</span><span class="n">eu</span><span class="o">-</span><span class="n">central</span><span class="o">-</span><span class="mf">1.</span><span class="n">amazonaws</span><span class="o">.</span><span class="n">com</span><span class="o">/</span><span class="n">train</span><span class="o">-</span><span class="n">images</span><span class="o">-</span><span class="n">idx3</span><span class="o">-</span><span class="n">ubyte</span><span class="o">.</span><span class="n">gz</span>
+<span class="n">Downloading</span><span class="w"> </span><span class="n">http</span><span class="p">:</span><span class="o">//</span><span class="n">fashion</span><span class="o">-</span><span class="n">mnist</span><span class="o">.</span><span class="n">s3</span><span class="o">-</span><span class="n">website</span><span class="o">.</span><span class="n">eu</span><span class="o">-</span><span class="n">central</span><span class="o">-</span><span class="mf">1.</span><span class="n">amazonaws</span><span class="o">.</span><span class="n">com</span><span class="o">/</span><span class="n">train</span><span class="o">-</span><span class="n">images</span><span class="o">-</span><span class="n">idx3</span><span class="o">-</span><span class="n">ubyte</span><span class="o">.</span><span class="n">gz</span><span class="w"> </span><span class="n">to</span><span class="w"> </span><span class="o">../</span><span class="n">data</span><span class="o">/</span><span class="n">FashionMNIST</span><span class="o">/</span><span class="n">raw</span><span class="o">/</span><span class="n">train</span><span class="o">-</span><span class="n">images</span><span class="o">-</span><span class="n">idx3</span><span class="o">-</span><span class="n">ubyte</span><span class="o">.</span><span class="n">gz</span>
+
+
+<span class="n">Extracting</span><span class="w"> </span><span class="o">../</span><span class="n">data</span><span class="o">/</span><span class="n">FashionMNIST</span><span class="o">/</span><span class="n">raw</span><span class="o">/</span><span class="n">train</span><span class="o">-</span><span class="n">images</span><span class="o">-</span><span class="n">idx3</span><span class="o">-</span><span class="n">ubyte</span><span class="o">.</span><span class="n">gz</span><span class="w"> </span><span class="n">to</span><span class="w"> </span><span class="o">../</span><span class="n">data</span><span class="o">/</span><span class="n">FashionMNIST</span><span class="o">/</span><span class="n">raw</span>
+
+<span class="n">Downloading</span><span class="w"> </span><span class="n">http</span><span class="p">:</span><span class="o">//</span><span class="n">fashion</span><span class="o">-</span><span class="n">mnist</span><span class="o">.</span><span class="n">s3</span><span class="o">-</span><span class="n">website</span><span class="o">.</span><span class="n">eu</span><span class="o">-</span><span class="n">central</span><span class="o">-</span><span class="mf">1.</span><span class="n">amazonaws</span><span class="o">.</span><span class="n">com</span><span class="o">/</span><span class="n">train</span><span class="o">-</span><span class="n">labels</span><span class="o">-</span><span class="n">idx1</span><span class="o">-</span><span class="n">ubyte</span><span class="o">.</span><span class="n">gz</span>
+<span class="n">Downloading</span><span class="w"> </span><span class="n">http</span><span class="p">:</span><span class="o">//</span><span class="n">fashion</span><span class="o">-</span><span class="n">mnist</span><span class="o">.</span><span class="n">s3</span><span class="o">-</span><span class="n">website</span><span class="o">.</span><span class="n">eu</span><span class="o">-</span><span class="n">central</span><span class="o">-</span><span class="mf">1.</span><span class="n">amazonaws</span><span class="o">.</span><span class="n">com</span><span class="o">/</span><span class="n">train</span><span class="o">-</span><span class="n">labels</span><span class="o">-</span><span class="n">idx1</span><span class="o">-</span><span class="n">ubyte</span><span class="o">.</span><span class="n">gz</span><span class="w"> </span><span class="n">to</span><span class="w"> </span><span class="o">../</span><span class="n">data</span><span class="o">/</span><span class="n">FashionMNIST</span><span class="o">/</span><span class="n">raw</span><span class="o">/</span><span class="n">train</span><span class="o">-</span><span class="n">labels</span><span class="o">-</span><span class="n">idx1</span><span class="o">-</span><span class="n">ubyte</span><span class="o">.</span><span class="n">gz</span>
+
+
+<span class="n">Extracting</span><span class="w"> </span><span class="o">../</span><span class="n">data</span><span class="o">/</span><span class="n">FashionMNIST</span><span class="o">/</span><span class="n">raw</span><span class="o">/</span><span class="n">train</span><span class="o">-</span><span class="n">labels</span><span class="o">-</span><span class="n">idx1</span><span class="o">-</span><span class="n">ubyte</span><span class="o">.</span><span class="n">gz</span><span class="w"> </span><span class="n">to</span><span class="w"> </span><span class="o">../</span><span class="n">data</span><span class="o">/</span><span class="n">FashionMNIST</span><span class="o">/</span><span class="n">raw</span>
+
+<span class="n">Downloading</span><span class="w"> </span><span class="n">http</span><span class="p">:</span><span class="o">//</span><span class="n">fashion</span><span class="o">-</span><span class="n">mnist</span><span class="o">.</span><span class="n">s3</span><span class="o">-</span><span class="n">website</span><span class="o">.</span><span class="n">eu</span><span class="o">-</span><span class="n">central</span><span class="o">-</span><span class="mf">1.</span><span class="n">amazonaws</span><span class="o">.</span><span class="n">com</span><span class="o">/</span><span class="n">t10k</span><span class="o">-</span><span class="n">images</span><span class="o">-</span><span class="n">idx3</span><span class="o">-</span><span class="n">ubyte</span><span class="o">.</span><span class="n">gz</span>
+<span class="n">Downloading</span><span class="w"> </span><span class="n">http</span><span class="p">:</span><span class="o">//</span><span class="n">fashion</span><span class="o">-</span><span class="n">mnist</span><span class="o">.</span><span class="n">s3</span><span class="o">-</span><span class="n">website</span><span class="o">.</span><span class="n">eu</span><span class="o">-</span><span class="n">central</span><span class="o">-</span><span class="mf">1.</span><span class="n">amazonaws</span><span class="o">.</span><span class="n">com</span><span class="o">/</span><span class="n">t10k</span><span class="o">-</span><span class="n">images</span><span class="o">-</span><span class="n">idx3</span><span class="o">-</span><span class="n">ubyte</span><span class="o">.</span><span class="n">gz</span><span class="w"> </span><span class="n">to</span><span class="w"> </span><span class="o">../</span><span class="n">data</span><span class="o">/</span><span class="n">FashionMNIST</span><span class="o">/</span><span class="n">raw</span><span class="o">/</span><span class="n">t10k</span><span class="o">-</span><span class="n">images</span><span class="o">-</span><span class="n">idx3</span><span class="o">-</span><span class="n">ubyte</span><span class="o">.</span><span class="n">gz</span>
+
+
+<span class="n">Extracting</span><span class="w"> </span><span class="o">../</span><span class="n">data</span><span class="o">/</span><span class="n">FashionMNIST</span><span class="o">/</span><span class="n">raw</span><span class="o">/</span><span class="n">t10k</span><span class="o">-</span><span class="n">images</span><span class="o">-</span><span class="n">idx3</span><span class="o">-</span><span class="n">ubyte</span><span class="o">.</span><span class="n">gz</span><span class="w"> </span><span class="n">to</span><span class="w"> </span><span class="o">../</span><span class="n">data</span><span class="o">/</span><span class="n">FashionMNIST</span><span class="o">/</span><span class="n">raw</span>
+
+<span class="n">Downloading</span><span class="w"> </span><span class="n">http</span><span class="p">:</span><span class="o">//</span><span class="n">fashion</span><span class="o">-</span><span class="n">mnist</span><span class="o">.</span><span class="n">s3</span><span class="o">-</span><span class="n">website</span><span class="o">.</span><span class="n">eu</span><span class="o">-</span><span class="n">central</span><span class="o">-</span><span class="mf">1.</span><span class="n">amazonaws</span><span class="o">.</span><span class="n">com</span><span class="o">/</span><span class="n">t10k</span><span class="o">-</span><span class="n">labels</span><span class="o">-</span><span class="n">idx1</span><span class="o">-</span><span class="n">ubyte</span><span class="o">.</span><span class="n">gz</span>
+<span class="n">Downloading</span><span class="w"> </span><span class="n">http</span><span class="p">:</span><span class="o">//</span><span class="n">fashion</span><span class="o">-</span><span class="n">mnist</span><span class="o">.</span><span class="n">s3</span><span class="o">-</span><span class="n">website</span><span class="o">.</span><span class="n">eu</span><span class="o">-</span><span class="n">central</span><span class="o">-</span><span class="mf">1.</span><span class="n">amazonaws</span><span class="o">.</span><span class="n">com</span><span class="o">/</span><span class="n">t10k</span><span class="o">-</span><span class="n">labels</span><span class="o">-</span><span class="n">idx1</span><span class="o">-</span><span class="n">ubyte</span><span class="o">.</span><span class="n">gz</span><span class="w"> </span><span class="n">to</span><span class="w"> </span><span class="o">../</span><span class="n">data</span><span class="o">/</span><span class="n">FashionMNIST</span><span class="o">/</span><span class="n">raw</span><span class="o">/</span><span class="n">t10k</span><span class="o">-</span><span class="n">labels</span><span class="o">-</span><span class="n">idx1</span><span class="o">-</span><span class="n">ubyte</span><span class="o">.</span><span class="n">gz</span>
+
+
+<span class="n">Extracting</span><span class="w"> </span><span class="o">../</span><span class="n">data</span><span class="o">/</span><span class="n">FashionMNIST</span><span class="o">/</span><span class="n">raw</span><span class="o">/</span><span class="n">t10k</span><span class="o">-</span><span class="n">labels</span><span class="o">-</span><span class="n">idx1</span><span class="o">-</span><span class="n">ubyte</span><span class="o">.</span><span class="n">gz</span><span class="w"> </span><span class="n">to</span><span class="w"> </span><span class="o">../</span><span class="n">data</span><span class="o">/</span><span class="n">FashionMNIST</span><span class="o">/</span><span class="n">raw</span>
+
+
+
+<span class="o">/</span><span class="n">usr</span><span class="o">/</span><span class="n">local</span><span class="o">/</span><span class="n">lib</span><span class="o">/</span><span class="n">python3</span><span class="o">.</span><span class="mi">7</span><span class="o">/</span><span class="n">dist</span><span class="o">-</span><span class="n">packages</span><span class="o">/</span><span class="n">torch</span><span class="o">/</span><span class="n">utils</span><span class="o">/</span><span class="n">data</span><span class="o">/</span><span class="n">dataloader</span><span class="o">.</span><span class="n">py</span><span class="p">:</span><span class="mi">481</span><span class="p">:</span><span class="w"> </span><span class="n">UserWarning</span><span class="p">:</span><span class="w"> </span><span class="n">This</span><span class="w"> </span><span class="n">DataLoader</span><span class="w"> </span><span class="n">will</span><span class="w"> </span><span class="n">create</span><span class="w"> </span><span class="mi">4</span><span class="w"> </span><span class="n">worker</span><span class="w"> </span><span class="n">processes</span><span class="w"> </span><span class="ow">in</span><span class="w"> </span><span class="n">total</span><span class="o">.</span><span class="w"> </span><span class="n">Our</span><span class="w"> </span><span class="n">suggested</span><span class="w"> </span><span class="nb">max</span><span class="w"> </span><span class="n">number</span><span class="w"> </span><span class="n">of</span><span class="w"> </span><span class="n">worker</span><span class="w"> </span><span class="ow">in</span><span class="w"> </span><span class="n">current</span><span class="w"> </span><span class="n">system</span><span class="w"> </span><span class="k">is</span><span class="w"> </span><span class="mi">2</span><span class="p">,</span><span class="w"> </span><span class="n">which</span><span class="w"> </span><span class="k">is</span><span class="w"> </span><span class="n">smaller</span><span class="w"> </span><span class="n">than</span><span class="w"> </span><span class="n">what</span><span class="w"> </span><span class="n">this</span><span class="w"> </span><span class="n">DataLoader</span><span class="w"> </span><span class="k">is</span><span class="w"> </span><span class="n">going</span><span class="w"> </span><span class="n">to</span><span class="w"> </span><span class="n">create</span><span class="o">.</span><span class="w"> </span><span class="n">Please</span><span class="w"> </span><span class="n">be</span><span class="w"> </span><span class="n">aware</span><span class="w"> </span><span class="n">that</span><span class="w"> </span><span class="n">excessive</span><span class="w"> </span><span class="n">worker</span><span class="w"> </span><span class="n">creation</span><span class="w"> </span><span class="n">might</span><span class="w"> </span><span class="n">get</span><span class="w"> </span><span class="n">DataLoader</span><span class="w"> </span><span class="n">running</span><span class="w"> </span><span class="n">slow</span><span class="w"> </span><span class="ow">or</span><span class="w"> </span><span class="n">even</span><span class="w"> </span><span class="n">freeze</span><span class="p">,</span><span class="w"> </span><span class="n">lower</span><span class="w"> </span><span class="n">the</span><span class="w"> </span><span class="n">worker</span><span class="w"> </span><span class="n">number</span><span class="w"> </span><span class="n">to</span><span class="w"> </span><span class="n">avoid</span><span class="w"> </span><span class="n">potential</span><span class="w"> </span><span class="n">slowness</span><span class="o">/</span><span class="n">freeze</span><span class="w"> </span><span class="k">if</span><span class="w"> </span><span class="n">necessary</span><span class="o">.</span>
+<span class="w">  </span><span class="n">cpuset_checked</span><span class="p">))</span>
+</code></pre></div>
+
+<p>While CNNs have fewer parameters,
+they can still be more expensive to compute
+than similarly deep MLPs
+because each parameter participates in many more
+multiplications.
+If you have access to a GPU, this might be a good time
+to put it into action to speed up training.</p>
+<p>For evaluation, we need to <strong>make a slight modification
+to the <code>evaluate_accuracy</code> function</strong> that we described
+in the implementation of softmax from the scratch.
+Since the full dataset is in the main memory,
+we need to copy it to the GPU memory before the model uses GPU to compute with the dataset.</p>
+<div class="codehilite"><pre><span></span><code><span class="c1">#witch device = &#39;cpu&#39; you can run the code on cpu</span>
+
+<span class="k">def</span> <span class="nf">evaluate_accuracy_gpu</span><span class="p">(</span><span class="n">net</span><span class="p">,</span> <span class="n">data_iter</span><span class="p">,</span> <span class="n">device</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span> 
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Compute the accuracy for a model on a dataset using a GPU.&quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">net</span><span class="p">,</span> <span class="n">nn</span><span class="o">.</span><span class="n">Module</span><span class="p">):</span>
+        <span class="n">net</span><span class="o">.</span><span class="n">eval</span><span class="p">()</span>  <span class="c1"># Set the model to evaluation mode</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">device</span><span class="p">:</span>
+            <span class="n">device</span> <span class="o">=</span> <span class="nb">next</span><span class="p">(</span><span class="nb">iter</span><span class="p">(</span><span class="n">net</span><span class="o">.</span><span class="n">parameters</span><span class="p">()))</span><span class="o">.</span><span class="n">device</span>
+    <span class="c1"># No. of correct predictions, no. of predictions</span>
+    <span class="n">metric</span> <span class="o">=</span> <span class="n">d2l</span><span class="o">.</span><span class="n">Accumulator</span><span class="p">(</span><span class="mi">2</span><span class="p">)</span>
+
+    <span class="k">with</span> <span class="n">torch</span><span class="o">.</span><span class="n">no_grad</span><span class="p">():</span>
+        <span class="k">for</span> <span class="n">X</span><span class="p">,</span> <span class="n">y</span> <span class="ow">in</span> <span class="n">data_iter</span><span class="p">:</span>
+            <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">X</span><span class="p">,</span> <span class="nb">list</span><span class="p">):</span>
+                <span class="c1"># Required for BERT Fine-tuning (to be covered later)</span>
+                <span class="n">X</span> <span class="o">=</span> <span class="p">[</span><span class="n">x</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="n">device</span><span class="p">)</span> <span class="k">for</span> <span class="n">x</span> <span class="ow">in</span> <span class="n">X</span><span class="p">]</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">X</span> <span class="o">=</span> <span class="n">X</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="n">device</span><span class="p">)</span>
+            <span class="n">y</span> <span class="o">=</span> <span class="n">y</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="n">device</span><span class="p">)</span>
+            <span class="n">metric</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">d2l</span><span class="o">.</span><span class="n">accuracy</span><span class="p">(</span><span class="n">net</span><span class="p">(</span><span class="n">X</span><span class="p">),</span> <span class="n">y</span><span class="p">),</span> <span class="n">y</span><span class="o">.</span><span class="n">numel</span><span class="p">())</span>
+    <span class="k">return</span> <span class="n">metric</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">/</span> <span class="n">metric</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span>
+</code></pre></div>
+
+<p>We also need to <strong>update our training function to deal with GPUs.</strong>
+Unlike the <code>train_epoch_ch3</code> defined in the implementation of the softmax from the scratch,
+we now need to move each minibatch of data
+to our designated device (hopefully, the GPU)
+prior to making the forward and backward propagations.</p>
+<p>The training function <code>train_ch6</code> is also similar
+to <code>train_ch3</code> defined befire.
+Since we will be implementing networks with many layers
+going forward, we will rely primarily on high-level APIs.
+The following training function assumes a model created from high-level APIs
+as input and is optimized accordingly.
+We initialize the model parameters
+on the device indicated by the <code>device</code> argument, using Xavier initialization.
+Just as with MLPs, our loss function is cross-entropy,
+and we minimize it via minibatch stochastic gradient descent.
+Since each epoch takes tens of seconds to run,
+we visualize the training loss more frequently.</p>
+<div class="codehilite"><pre><span></span><code><span class="k">def</span> <span class="nf">train_ch6</span><span class="p">(</span><span class="n">net</span><span class="p">,</span> <span class="n">train_iter</span><span class="p">,</span> <span class="n">test_iter</span><span class="p">,</span> <span class="n">num_epochs</span><span class="p">,</span> <span class="n">lr</span><span class="p">,</span> <span class="n">device</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Train a model with a GPU (defined in Chapter 6).&quot;&quot;&quot;</span>
+    <span class="k">def</span> <span class="nf">init_weights</span><span class="p">(</span><span class="n">m</span><span class="p">):</span>
+        <span class="k">if</span> <span class="nb">type</span><span class="p">(</span><span class="n">m</span><span class="p">)</span> <span class="o">==</span> <span class="n">nn</span><span class="o">.</span><span class="n">Linear</span> <span class="ow">or</span> <span class="nb">type</span><span class="p">(</span><span class="n">m</span><span class="p">)</span> <span class="o">==</span> <span class="n">nn</span><span class="o">.</span><span class="n">Conv2d</span><span class="p">:</span>
+            <span class="n">nn</span><span class="o">.</span><span class="n">init</span><span class="o">.</span><span class="n">xavier_uniform_</span><span class="p">(</span><span class="n">m</span><span class="o">.</span><span class="n">weight</span><span class="p">)</span>
+
+    <span class="n">net</span><span class="o">.</span><span class="n">apply</span><span class="p">(</span><span class="n">init_weights</span><span class="p">)</span>
+    <span class="nb">print</span><span class="p">(</span><span class="s1">&#39;training on&#39;</span><span class="p">,</span> <span class="n">device</span><span class="p">)</span>
+    <span class="n">net</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="n">device</span><span class="p">)</span>
+    <span class="n">optimizer</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">optim</span><span class="o">.</span><span class="n">SGD</span><span class="p">(</span><span class="n">net</span><span class="o">.</span><span class="n">parameters</span><span class="p">(),</span> <span class="n">lr</span><span class="o">=</span><span class="n">lr</span><span class="p">)</span>
+    <span class="n">loss</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">CrossEntropyLoss</span><span class="p">()</span>
+    <span class="n">animator</span> <span class="o">=</span> <span class="n">d2l</span><span class="o">.</span><span class="n">Animator</span><span class="p">(</span><span class="n">xlabel</span><span class="o">=</span><span class="s1">&#39;epoch&#39;</span><span class="p">,</span> <span class="n">xlim</span><span class="o">=</span><span class="p">[</span><span class="mi">1</span><span class="p">,</span> <span class="n">num_epochs</span><span class="p">],</span>
+                            <span class="n">legend</span><span class="o">=</span><span class="p">[</span><span class="s1">&#39;train loss&#39;</span><span class="p">,</span> <span class="s1">&#39;train acc&#39;</span><span class="p">,</span> <span class="s1">&#39;test acc&#39;</span><span class="p">])</span>
+    <span class="n">timer</span><span class="p">,</span> <span class="n">num_batches</span> <span class="o">=</span> <span class="n">d2l</span><span class="o">.</span><span class="n">Timer</span><span class="p">(),</span> <span class="nb">len</span><span class="p">(</span><span class="n">train_iter</span><span class="p">)</span>
+    <span class="k">for</span> <span class="n">epoch</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">num_epochs</span><span class="p">):</span>
+        <span class="c1"># Sum of training loss, sum of training accuracy, no. of examples</span>
+        <span class="n">metric</span> <span class="o">=</span> <span class="n">d2l</span><span class="o">.</span><span class="n">Accumulator</span><span class="p">(</span><span class="mi">3</span><span class="p">)</span>
+        <span class="n">net</span><span class="o">.</span><span class="n">train</span><span class="p">()</span>
+        <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="p">(</span><span class="n">X</span><span class="p">,</span> <span class="n">y</span><span class="p">)</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">train_iter</span><span class="p">):</span>
+            <span class="n">timer</span><span class="o">.</span><span class="n">start</span><span class="p">()</span>
+            <span class="n">optimizer</span><span class="o">.</span><span class="n">zero_grad</span><span class="p">()</span>
+            <span class="n">X</span><span class="p">,</span> <span class="n">y</span> <span class="o">=</span> <span class="n">X</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="n">device</span><span class="p">),</span> <span class="n">y</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="n">device</span><span class="p">)</span>
+            <span class="n">y_hat</span> <span class="o">=</span> <span class="n">net</span><span class="p">(</span><span class="n">X</span><span class="p">)</span>
+            <span class="n">l</span> <span class="o">=</span> <span class="n">loss</span><span class="p">(</span><span class="n">y_hat</span><span class="p">,</span> <span class="n">y</span><span class="p">)</span>
+            <span class="n">l</span><span class="o">.</span><span class="n">backward</span><span class="p">()</span>
+            <span class="n">optimizer</span><span class="o">.</span><span class="n">step</span><span class="p">()</span>
+            <span class="k">with</span> <span class="n">torch</span><span class="o">.</span><span class="n">no_grad</span><span class="p">():</span>
+                <span class="n">metric</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">l</span> <span class="o">*</span> <span class="n">X</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">d2l</span><span class="o">.</span><span class="n">accuracy</span><span class="p">(</span><span class="n">y_hat</span><span class="p">,</span> <span class="n">y</span><span class="p">),</span> <span class="n">X</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
+            <span class="n">timer</span><span class="o">.</span><span class="n">stop</span><span class="p">()</span>
+            <span class="n">train_l</span> <span class="o">=</span> <span class="n">metric</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">/</span> <span class="n">metric</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span>
+            <span class="n">train_acc</span> <span class="o">=</span> <span class="n">metric</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">/</span> <span class="n">metric</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span>
+            <span class="k">if</span> <span class="p">(</span><span class="n">i</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span> <span class="o">%</span> <span class="p">(</span><span class="n">num_batches</span> <span class="o">//</span> <span class="mi">5</span><span class="p">)</span> <span class="o">==</span> <span class="mi">0</span> <span class="ow">or</span> <span class="n">i</span> <span class="o">==</span> <span class="n">num_batches</span> <span class="o">-</span> <span class="mi">1</span><span class="p">:</span>
+                <span class="n">animator</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">epoch</span> <span class="o">+</span> <span class="p">(</span><span class="n">i</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span> <span class="o">/</span> <span class="n">num_batches</span><span class="p">,</span>
+                             <span class="p">(</span><span class="n">train_l</span><span class="p">,</span> <span class="n">train_acc</span><span class="p">,</span> <span class="kc">None</span><span class="p">))</span>
+        <span class="n">test_acc</span> <span class="o">=</span> <span class="n">evaluate_accuracy_gpu</span><span class="p">(</span><span class="n">net</span><span class="p">,</span> <span class="n">test_iter</span><span class="p">)</span>
+        <span class="n">animator</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">epoch</span> <span class="o">+</span> <span class="mi">1</span><span class="p">,</span> <span class="p">(</span><span class="kc">None</span><span class="p">,</span> <span class="kc">None</span><span class="p">,</span> <span class="n">test_acc</span><span class="p">))</span>
+    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;loss </span><span class="si">{</span><span class="n">train_l</span><span class="si">:</span><span class="s1">.3f</span><span class="si">}</span><span class="s1">, train acc </span><span class="si">{</span><span class="n">train_acc</span><span class="si">:</span><span class="s1">.3f</span><span class="si">}</span><span class="s1">, &#39;</span>
+          <span class="sa">f</span><span class="s1">&#39;test acc </span><span class="si">{</span><span class="n">test_acc</span><span class="si">:</span><span class="s1">.3f</span><span class="si">}</span><span class="s1">&#39;</span><span class="p">)</span>
+    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;</span><span class="si">{</span><span class="n">metric</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="n">num_epochs</span><span class="w"> </span><span class="o">/</span><span class="w"> </span><span class="n">timer</span><span class="o">.</span><span class="n">sum</span><span class="p">()</span><span class="si">:</span><span class="s1">.1f</span><span class="si">}</span><span class="s1"> examples/sec &#39;</span>
+          <span class="sa">f</span><span class="s1">&#39;on </span><span class="si">{</span><span class="nb">str</span><span class="p">(</span><span class="n">device</span><span class="p">)</span><span class="si">}</span><span class="s1">&#39;</span><span class="p">)</span>
+</code></pre></div>
+
+<p><strong>Now let us train and evaluate the LeNet-5 model.</strong></p>
+<div class="codehilite"><pre><span></span><code><span class="n">lr</span><span class="p">,</span> <span class="n">num_epochs</span> <span class="o">=</span> <span class="mf">0.9</span><span class="p">,</span> <span class="mi">10</span>
+<span class="n">train_ch6</span><span class="p">(</span><span class="n">net</span><span class="p">,</span> <span class="n">train_iter</span><span class="p">,</span> <span class="n">test_iter</span><span class="p">,</span> <span class="n">num_epochs</span><span class="p">,</span> <span class="n">lr</span><span class="p">,</span> <span class="n">d2l</span><span class="o">.</span><span class="n">try_gpu</span><span class="p">())</span>
+</code></pre></div>
+
+<div class="codehilite"><pre><span></span><code>loss 0.485, train acc 0.818, test acc 0.797
+4037.2 examples/sec on cpu
+</code></pre></div>
+
+<p><img alt="svg" src="output_12_1.svg" /></p>
+<h2>Summary</h2>
+<ul>
+<li>A CNN is a network that employs convolutional layers.</li>
+<li>In a CNN, we interleave convolutions, nonlinearities, and (often) pooling operations.</li>
+<li>In a CNN, convolutional layers are typically arranged so that they gradually decrease the spatial resolution of the representations, while increasing the number of channels.</li>
+<li>In traditional CNNs, the representations encoded by the convolutional blocks are processed by one or more fully-connected layers prior to emitting output.</li>
+<li>LeNet was arguably the first successful deployment of such a network.</li>
+</ul>
+<h2>Exercises</h2>
+<ol>
+<li>Replace the average pooling with maximum pooling. What happens?</li>
+</ol>
+<p><a href="https://discuss.d2l.ai/t/74">Discussions</a></p>
+</body>
+</html>

@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8"/>
+  <title>sequence_Exercises.ipynb</title>
+</head>
+<body>
+<h1>Sequence Models</h1>
+<p>Imagine that you are watching movies on Netflix. As a good Netflix user, you decide to rate each of the movies religiously. After all, a good movie is a good movie, and you want to watch more of them, right? As it turns out, things are not quite so simple. People's opinions on movies can change quite significantly over time. In fact, psychologists even have names for some of the effects:</p>
+<ul>
+<li>There is <em>anchoring</em>, based on someone else's opinion. For instance, after the Oscar awards, ratings for the corresponding movie go up, even though it is still the same movie. This effect persists for a few months until the award is forgotten. It has been shown that the effect lifts rating by over half a point
+<code>Wu.Ahmed.Beutel.ea.2017</code>.</li>
+<li>There is the <em>hedonic adaptation</em>, where humans quickly adapt to accept an improved or a worsened situation as the new normal. For instance, after watching many good movies, the expectations that the next movie is equally good or better are high. Hence, even an average movie might be considered as bad after many great ones are watched.</li>
+<li>There is <em>seasonality</em>. Very few viewers like to watch a Santa Claus movie in August.</li>
+<li>In some cases, movies become unpopular due to the misbehaviors of directors or actors in the production.</li>
+<li>Some movies become cult movies, because they were almost comically bad. <em>Plan 9 from Outer Space</em> and <em>Troll 2</em> achieved a high degree of notoriety for this reason.</li>
+</ul>
+<p>In short, movie ratings are anything but stationary. Thus, using temporal dynamics
+led to more accurate movie recommendations <code>Koren.2009</code>.
+Of course, sequence data are not just about movie ratings. The following gives more illustrations.</p>
+<ul>
+<li>Many users have highly particular behavior when it comes to the time when they open apps. For instance, social media apps are much more popular after school with students. Stock market trading apps are more commonly used when the markets are open.</li>
+<li>It is much harder to predict tomorrow's stock prices than to fill in the blanks for a stock price we missed yesterday, even though both are just a matter of estimating one number. After all, foresight is so much harder than hindsight. In statistics, the former (predicting beyond the known observations) is called <em>extrapolation</em> whereas the latter (estimating between the existing observations) is called <em>interpolation</em>.</li>
+<li>Music, speech, text, and videos are all sequential in nature. If we were to permute them they would make little sense. The headline <em>dog bites man</em> is much less surprising than <em>man bites dog</em>, even though the words are identical.</li>
+<li>Earthquakes are strongly correlated, i.e., after a massive earthquake there are very likely several smaller aftershocks, much more so than without the strong quake. In fact, earthquakes are spatiotemporally correlated, i.e., the aftershocks typically occur within a short time span and in close proximity.</li>
+<li>Humans interact with each other in a sequential nature, as can be seen in Twitter fights, dance patterns, and debates.</li>
+</ul>
+<h2>Statistical Tools</h2>
+<p>We need statistical tools and new deep neural network architectures to deal with sequence data. To keep things simple, we use the stock price (FTSE 100 index) illustrated in figure 8.1.1 as an example (https://d2l.ai/chapter_recurrent-neural-networks/sequence.html).</p>
+<p>Let us denote the prices by $x_t$, i.e., at <em>time step</em> $t \in \mathbb{Z}^+$ we observe price $x_t$.
+Note that for sequences in this text,
+$t$ will typically be discrete and vary over integers or its subset.
+Suppose that
+a trader who wants to do well in the stock market on day $t$ predicts $x_t$ via</p>
+<p>$$x_t \sim P(x_t \mid x_{t-1}, \ldots, x_1).$$</p>
+<h3>Autoregressive Models</h3>
+<p>In order to achieve this, our trader could use a regression model.
+There is just one major problem: the number of inputs, $x_{t-1}, \ldots, x_1$ varies, depending on $t$.
+That is to say, the number increases with the amount of data that we encounter, and we will need an approximation to make this computationally tractable.
+Much of what follows in this chapter will revolve around how to estimate $P(x_t \mid x_{t-1}, \ldots, x_1)$ efficiently. In a nutshell it boils down to two strategies as follows.</p>
+<p>First, assume that the potentially rather long sequence $x_{t-1}, \ldots, x_1$ is not really necessary.
+In this case we might content ourselves with some timespan of length $\tau$ and only use $x_{t-1}, \ldots, x_{t-\tau}$ observations. The immediate benefit is that now the number of arguments is always the same, at least for $t &gt; \tau$. This allows us to train a deep network as indicated above. Such models will be called <em>autoregressive models</em>, as they quite literally perform regression on themselves.</p>
+<p>The second strategy, shown in figure 8.1.2, is to keep some summary $h_t$ of the past observations, and at the same time update $h_t$ in addition to the prediction $\hat{x}<em>t$.
+This leads to models that estimate $x_t$ with $\hat{x}_t = P(x_t \mid h</em>{t})$ and moreover updates of the form  $h_t = g(h_{t-1}, x_{t-1})$. Since $h_t$ is never observed, these models are also called <em>latent autoregressive models</em>.</p>
+<p>Both cases raise the obvious question of how to generate training data. One typically uses historical observations to predict the next observation given the ones up to right now. Obviously we do not expect time to stand still. However, a common assumption is that while the specific values of $x_t$ might change, at least the dynamics of the sequence itself will not. This is reasonable, since novel dynamics are just that, novel and thus not predictable using data that we have so far. Statisticians call dynamics that do not change <em>stationary</em>.
+Regardless of what we do, we will thus get an estimate of the entire sequence via</p>
+<p>$$P(x_1, \ldots, x_T) = \prod_{t=1}^T P(x_t \mid x_{t-1}, \ldots, x_1).$$</p>
+<p>Note that the above considerations still hold if we deal with discrete objects, such as words, rather than continuous numbers. The only difference is that in such a situation we need to use a classifier rather than a regression model to estimate $P(x_t \mid  x_{t-1}, \ldots, x_1)$.</p>
+<h3>Markov Models</h3>
+<p>Recall the approximation that in an autoregressive model we use only $x_{t-1}, \ldots, x_{t-\tau}$ instead of $x_{t-1}, \ldots, x_1$ to estimate $x_t$. Whenever this approximation is accurate we say that the sequence satisfies a <em>Markov condition</em>. In particular, if $\tau = 1$, we have a <em>first-order Markov model</em> and $P(x)$ is given by</p>
+<p>$$P(x_1, \ldots, x_T) = \prod_{t=1}^T P(x_t \mid x_{t-1}) \text{ where } P(x_1 \mid x_0) = P(x_1).$$</p>
+<p>Such models are particularly nice whenever $x_t$ assumes only a discrete value, since in this case dynamic programming can be used to compute values along the chain exactly. For instance, we can compute $P(x_{t+1} \mid x_{t-1})$ efficiently:</p>
+<p>$$\begin{aligned}
+P(x_{t+1} \mid x_{t-1})
+&amp;= \frac{\sum_{x_t} P(x_{t+1}, x_t, x_{t-1})}{P(x_{t-1})}\
+&amp;= \frac{\sum_{x_t} P(x_{t+1} \mid x_t, x_{t-1}) P(x_t, x_{t-1})}{P(x_{t-1})}\
+&amp;= \sum_{x_t} P(x_{t+1} \mid x_t) P(x_t \mid x_{t-1})
+\end{aligned}
+$$</p>
+<p>by using the fact that we only need to take into account a very short history of past observations: $P(x_{t+1} \mid x_t, x_{t-1}) = P(x_{t+1} \mid x_t)$.
+Going into details of dynamic programming is beyond the scope of this section. Control and reinforcement learning algorithms use such tools extensively.</p>
+<h3>Causality</h3>
+<p>In principle, there is nothing wrong with unfolding $P(x_1, \ldots, x_T)$ in reverse order. After all, by conditioning we can always write it via</p>
+<p>$$P(x_1, \ldots, x_T) = \prod_{t=T}^1 P(x_t \mid x_{t+1}, \ldots, x_T).$$</p>
+<p>In fact, if we have a Markov model, we can obtain a reverse conditional probability distribution, too. In many cases, however, there exists a natural direction for the data, namely going forward in time. It is clear that future events cannot influence the past. Hence, if we change $x_t$, we may be able to influence what happens for $x_{t+1}$ going forward but not the converse. That is, if we change $x_t$, the distribution over past events will not change. Consequently, it ought to be easier to explain $P(x_{t+1} \mid x_t)$ rather than $P(x_t \mid x_{t+1})$. For instance, it has been shown that in some cases we can find $x_{t+1} = f(x_t) + \epsilon$ for some additive noise $\epsilon$, whereas the converse is not true <code>Hoyer.Janzing.Mooij.ea.2009</code>. This is great news, since it is typically the forward direction that we are interested in estimating.
+The book by Peters et al. has
+explained more on this topic <code>Peters.Janzing.Scholkopf.2017</code>.
+We are barely scratching the surface of it.</p>
+<h2>Training</h2>
+<p>After reviewing so many statistical tools,
+let us try this out in practice.
+We begin by generating some data.
+To keep things simple we <strong>generate our sequence data by using a sine function with some additive noise for time steps $1, 2, \ldots, 1000$.</strong></p>
+<div class="codehilite"><pre><span></span><code><span class="c1">#You only need the following line of code, if you use google colab</span>
+<span class="err">!</span> <span class="n">pip</span> <span class="n">install</span> <span class="n">d2l</span>
+<span class="o">%</span><span class="n">matplotlib</span> <span class="n">inline</span>
+<span class="kn">import</span> <span class="nn">torch</span>
+<span class="kn">from</span> <span class="nn">torch</span> <span class="kn">import</span> <span class="n">nn</span>
+<span class="kn">from</span> <span class="nn">d2l</span> <span class="kn">import</span> <span class="n">torch</span> <span class="k">as</span> <span class="n">d2l</span>
+</code></pre></div>
+
+<div class="codehilite"><pre><span></span><code><span class="n">Collecting</span><span class="w"> </span><span class="n">d2l</span>
+<span class="w">  </span><span class="n">Downloading</span><span class="w"> </span><span class="n">d2l</span><span class="o">-</span><span class="mf">0.17</span><span class="o">.</span><span class="mi">0</span><span class="o">-</span><span class="n">py3</span><span class="o">-</span><span class="n">none</span><span class="o">-</span><span class="n">any</span><span class="o">.</span><span class="n">whl</span><span class="w"> </span><span class="p">(</span><span class="mi">83</span><span class="w"> </span><span class="n">kB</span><span class="p">)</span>
+<span class="err"></span><span class="p">[</span><span class="err">?</span><span class="mi">25</span><span class="n">l</span>
+</code></pre></div>
+
+<p>[K     |████                            | 10 kB 13.5 MB/s eta 0:00:01
+[K     |███████▉                        | 20 kB 8.8 MB/s eta 0:00:01
+[K     |███████████▉                    | 30 kB 7.7 MB/s eta 0:00:01
+[K     |███████████████▊                | 40 kB 6.9 MB/s eta 0:00:01
+[K     |███████████████████▊            | 51 kB 5.2 MB/s eta 0:00:01
+[K     |███████████████████████▋        | 61 kB 5.3 MB/s eta 0:00:01
+[K     |███████████████████████████▋    | 71 kB 5.1 MB/s eta 0:00:01
+[K     |███████████████████████████████▌| 81 kB 5.7 MB/s eta 0:00:01
+[K     |████████████████████████████████| 83 kB 667 kB/s 
+    [?25hRequirement already satisfied: numpy in /usr/local/lib/python3.7/dist-packages (from d2l) (1.19.5)
+    Requirement already satisfied: pandas in /usr/local/lib/python3.7/dist-packages (from d2l) (1.1.5)
+    Requirement already satisfied: jupyter in /usr/local/lib/python3.7/dist-packages (from d2l) (1.0.0)
+    Requirement already satisfied: matplotlib in /usr/local/lib/python3.7/dist-packages (from d2l) (3.2.2)
+    Requirement already satisfied: requests in /usr/local/lib/python3.7/dist-packages (from d2l) (2.23.0)
+    Requirement already satisfied: ipywidgets in /usr/local/lib/python3.7/dist-packages (from jupyter-&gt;d2l) (7.6.5)
+    Requirement already satisfied: notebook in /usr/local/lib/python3.7/dist-packages (from jupyter-&gt;d2l) (5.3.1)
+    Requirement already satisfied: qtconsole in /usr/local/lib/python3.7/dist-packages (from jupyter-&gt;d2l) (5.2.0)
+    Requirement already satisfied: ipykernel in /usr/local/lib/python3.7/dist-packages (from jupyter-&gt;d2l) (4.10.1)
+    Requirement already satisfied: nbconvert in /usr/local/lib/python3.7/dist-packages (from jupyter-&gt;d2l) (5.6.1)
+    Requirement already satisfied: jupyter-console in /usr/local/lib/python3.7/dist-packages (from jupyter-&gt;d2l) (5.2.0)
+    Requirement already satisfied: jupyter-client in /usr/local/lib/python3.7/dist-packages (from ipykernel-&gt;jupyter-&gt;d2l) (5.3.5)
+    Requirement already satisfied: tornado&gt;=4.0 in /usr/local/lib/python3.7/dist-packages (from ipykernel-&gt;jupyter-&gt;d2l) (5.1.1)
+    Requirement already satisfied: traitlets&gt;=4.1.0 in /usr/local/lib/python3.7/dist-packages (from ipykernel-&gt;jupyter-&gt;d2l) (5.1.1)
+    Requirement already satisfied: ipython&gt;=4.0.0 in /usr/local/lib/python3.7/dist-packages (from ipykernel-&gt;jupyter-&gt;d2l) (5.5.0)
+    Requirement already satisfied: setuptools&gt;=18.5 in /usr/local/lib/python3.7/dist-packages (from ipython&gt;=4.0.0-&gt;ipykernel-&gt;jupyter-&gt;d2l) (57.4.0)
+    Requirement already satisfied: simplegeneric&gt;0.8 in /usr/local/lib/python3.7/dist-packages (from ipython&gt;=4.0.0-&gt;ipykernel-&gt;jupyter-&gt;d2l) (0.8.1)
+    Requirement already satisfied: pickleshare in /usr/local/lib/python3.7/dist-packages (from ipython&gt;=4.0.0-&gt;ipykernel-&gt;jupyter-&gt;d2l) (0.7.5)
+    Requirement already satisfied: decorator in /usr/local/lib/python3.7/dist-packages (from ipython&gt;=4.0.0-&gt;ipykernel-&gt;jupyter-&gt;d2l) (4.4.2)
+    Requirement already satisfied: pexpect in /usr/local/lib/python3.7/dist-packages (from ipython&gt;=4.0.0-&gt;ipykernel-&gt;jupyter-&gt;d2l) (4.8.0)
+    Requirement already satisfied: pygments in /usr/local/lib/python3.7/dist-packages (from ipython&gt;=4.0.0-&gt;ipykernel-&gt;jupyter-&gt;d2l) (2.6.1)
+    Requirement already satisfied: prompt-toolkit&lt;2.0.0,&gt;=1.0.4 in /usr/local/lib/python3.7/dist-packages (from ipython&gt;=4.0.0-&gt;ipykernel-&gt;jupyter-&gt;d2l) (1.0.18)
+    Requirement already satisfied: wcwidth in /usr/local/lib/python3.7/dist-packages (from prompt-toolkit&lt;2.0.0,&gt;=1.0.4-&gt;ipython&gt;=4.0.0-&gt;ipykernel-&gt;jupyter-&gt;d2l) (0.2.5)
+    Requirement already satisfied: six&gt;=1.9.0 in /usr/local/lib/python3.7/dist-packages (from prompt-toolkit&lt;2.0.0,&gt;=1.0.4-&gt;ipython&gt;=4.0.0-&gt;ipykernel-&gt;jupyter-&gt;d2l) (1.15.0)
+    Requirement already satisfied: nbformat&gt;=4.2.0 in /usr/local/lib/python3.7/dist-packages (from ipywidgets-&gt;jupyter-&gt;d2l) (5.1.3)
+    Requirement already satisfied: jupyterlab-widgets&gt;=1.0.0 in /usr/local/lib/python3.7/dist-packages (from ipywidgets-&gt;jupyter-&gt;d2l) (1.0.2)
+    Requirement already satisfied: widgetsnbextension~=3.5.0 in /usr/local/lib/python3.7/dist-packages (from ipywidgets-&gt;jupyter-&gt;d2l) (3.5.2)
+    Requirement already satisfied: ipython-genutils~=0.2.0 in /usr/local/lib/python3.7/dist-packages (from ipywidgets-&gt;jupyter-&gt;d2l) (0.2.0)
+    Requirement already satisfied: jsonschema!=2.5.0,&gt;=2.4 in /usr/local/lib/python3.7/dist-packages (from nbformat&gt;=4.2.0-&gt;ipywidgets-&gt;jupyter-&gt;d2l) (2.6.0)
+    Requirement already satisfied: jupyter-core in /usr/local/lib/python3.7/dist-packages (from nbformat&gt;=4.2.0-&gt;ipywidgets-&gt;jupyter-&gt;d2l) (4.9.1)
+    Requirement already satisfied: jinja2 in /usr/local/lib/python3.7/dist-packages (from notebook-&gt;jupyter-&gt;d2l) (2.11.3)
+    Requirement already satisfied: terminado&gt;=0.8.1 in /usr/local/lib/python3.7/dist-packages (from notebook-&gt;jupyter-&gt;d2l) (0.12.1)
+    Requirement already satisfied: Send2Trash in /usr/local/lib/python3.7/dist-packages (from notebook-&gt;jupyter-&gt;d2l) (1.8.0)
+    Requirement already satisfied: python-dateutil&gt;=2.1 in /usr/local/lib/python3.7/dist-packages (from jupyter-client-&gt;ipykernel-&gt;jupyter-&gt;d2l) (2.8.2)
+    Requirement already satisfied: pyzmq&gt;=13 in /usr/local/lib/python3.7/dist-packages (from jupyter-client-&gt;ipykernel-&gt;jupyter-&gt;d2l) (22.3.0)
+    Requirement already satisfied: ptyprocess in /usr/local/lib/python3.7/dist-packages (from terminado&gt;=0.8.1-&gt;notebook-&gt;jupyter-&gt;d2l) (0.7.0)
+    Requirement already satisfied: MarkupSafe&gt;=0.23 in /usr/local/lib/python3.7/dist-packages (from jinja2-&gt;notebook-&gt;jupyter-&gt;d2l) (2.0.1)
+    Requirement already satisfied: pyparsing!=2.0.4,!=2.1.2,!=2.1.6,&gt;=2.0.1 in /usr/local/lib/python3.7/dist-packages (from matplotlib-&gt;d2l) (3.0.6)
+    Requirement already satisfied: kiwisolver&gt;=1.0.1 in /usr/local/lib/python3.7/dist-packages (from matplotlib-&gt;d2l) (1.3.2)
+    Requirement already satisfied: cycler&gt;=0.10 in /usr/local/lib/python3.7/dist-packages (from matplotlib-&gt;d2l) (0.11.0)
+    Requirement already satisfied: pandocfilters&gt;=1.4.1 in /usr/local/lib/python3.7/dist-packages (from nbconvert-&gt;jupyter-&gt;d2l) (1.5.0)
+    Requirement already satisfied: bleach in /usr/local/lib/python3.7/dist-packages (from nbconvert-&gt;jupyter-&gt;d2l) (4.1.0)
+    Requirement already satisfied: entrypoints&gt;=0.2.2 in /usr/local/lib/python3.7/dist-packages (from nbconvert-&gt;jupyter-&gt;d2l) (0.3)
+    Requirement already satisfied: mistune&lt;2,&gt;=0.8.1 in /usr/local/lib/python3.7/dist-packages (from nbconvert-&gt;jupyter-&gt;d2l) (0.8.4)
+    Requirement already satisfied: testpath in /usr/local/lib/python3.7/dist-packages (from nbconvert-&gt;jupyter-&gt;d2l) (0.5.0)
+    Requirement already satisfied: defusedxml in /usr/local/lib/python3.7/dist-packages (from nbconvert-&gt;jupyter-&gt;d2l) (0.7.1)
+    Requirement already satisfied: packaging in /usr/local/lib/python3.7/dist-packages (from bleach-&gt;nbconvert-&gt;jupyter-&gt;d2l) (21.3)
+    Requirement already satisfied: webencodings in /usr/local/lib/python3.7/dist-packages (from bleach-&gt;nbconvert-&gt;jupyter-&gt;d2l) (0.5.1)
+    Requirement already satisfied: pytz&gt;=2017.2 in /usr/local/lib/python3.7/dist-packages (from pandas-&gt;d2l) (2018.9)
+    Requirement already satisfied: qtpy in /usr/local/lib/python3.7/dist-packages (from qtconsole-&gt;jupyter-&gt;d2l) (1.11.2)
+    Requirement already satisfied: chardet&lt;4,&gt;=3.0.2 in /usr/local/lib/python3.7/dist-packages (from requests-&gt;d2l) (3.0.4)
+    Requirement already satisfied: certifi&gt;=2017.4.17 in /usr/local/lib/python3.7/dist-packages (from requests-&gt;d2l) (2021.10.8)
+    Requirement already satisfied: urllib3!=1.25.0,!=1.25.1,&lt;1.26,&gt;=1.21.1 in /usr/local/lib/python3.7/dist-packages (from requests-&gt;d2l) (1.24.3)
+    Requirement already satisfied: idna&lt;3,&gt;=2.5 in /usr/local/lib/python3.7/dist-packages (from requests-&gt;d2l) (2.10)
+    Installing collected packages: d2l
+    Successfully installed d2l-0.17.0</p>
+<div class="codehilite"><pre><span></span><code><span class="n">T</span> <span class="o">=</span> <span class="mi">1000</span>  <span class="c1"># Generate a total of 1000 points</span>
+<span class="n">time</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="n">T</span> <span class="o">+</span> <span class="mi">1</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">torch</span><span class="o">.</span><span class="n">float32</span><span class="p">)</span>
+<span class="n">x</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">sin</span><span class="p">(</span><span class="mf">0.01</span> <span class="o">*</span> <span class="n">time</span><span class="p">)</span> <span class="o">+</span> <span class="n">torch</span><span class="o">.</span><span class="n">normal</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mf">0.2</span><span class="p">,</span> <span class="p">(</span><span class="n">T</span><span class="p">,))</span>
+<span class="n">d2l</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="n">time</span><span class="p">,</span> <span class="p">[</span><span class="n">x</span><span class="p">],</span> <span class="s1">&#39;time&#39;</span><span class="p">,</span> <span class="s1">&#39;x&#39;</span><span class="p">,</span> <span class="n">xlim</span><span class="o">=</span><span class="p">[</span><span class="mi">1</span><span class="p">,</span> <span class="mi">1000</span><span class="p">],</span> <span class="n">figsize</span><span class="o">=</span><span class="p">(</span><span class="mi">6</span><span class="p">,</span> <span class="mi">3</span><span class="p">))</span>
+</code></pre></div>
+
+<p><img alt="svg" src="output_2_0.svg" /></p>
+<p>Next, we need to turn such a sequence into features and labels that our model can train on.
+Based on the embedding dimension $\tau$ we <strong>map the data into pairs $y_t = x_t$ and $\mathbf{x}<em>t = [x</em>{t-\tau}, \ldots, x_{t-1}]$.</strong>
+The astute reader might have noticed that this gives us $\tau$ fewer data examples, since we do not have sufficient history for the first $\tau$ of them.
+A simple fix, in particular if the sequence is long,
+is to discard those few terms.
+Alternatively we could pad the sequence with zeros.
+Here we only use the first 600 feature-label pairs for training.</p>
+<div class="codehilite"><pre><span></span><code><span class="n">tau</span> <span class="o">=</span> <span class="mi">4</span>
+<span class="n">features</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="n">T</span> <span class="o">-</span> <span class="n">tau</span><span class="p">,</span> <span class="n">tau</span><span class="p">))</span>
+<span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">tau</span><span class="p">):</span>
+    <span class="n">features</span><span class="p">[:,</span> <span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">x</span><span class="p">[</span><span class="n">i</span><span class="p">:</span><span class="n">T</span> <span class="o">-</span> <span class="n">tau</span> <span class="o">+</span> <span class="n">i</span><span class="p">]</span>
+<span class="n">labels</span> <span class="o">=</span> <span class="n">x</span><span class="p">[</span><span class="n">tau</span><span class="p">:]</span><span class="o">.</span><span class="n">reshape</span><span class="p">((</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">))</span>
+</code></pre></div>
+
+<div class="codehilite"><pre><span></span><code><span class="n">batch_size</span><span class="p">,</span> <span class="n">n_train</span> <span class="o">=</span> <span class="mi">16</span><span class="p">,</span> <span class="mi">600</span>
+<span class="c1"># Only the first `n_train` examples are used for training</span>
+<span class="n">train_iter</span> <span class="o">=</span> <span class="n">d2l</span><span class="o">.</span><span class="n">load_array</span><span class="p">((</span><span class="n">features</span><span class="p">[:</span><span class="n">n_train</span><span class="p">],</span> <span class="n">labels</span><span class="p">[:</span><span class="n">n_train</span><span class="p">]),</span>
+                            <span class="n">batch_size</span><span class="p">,</span> <span class="n">is_train</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+</code></pre></div>
+
+<p>Here we <strong>keep the architecture fairly simple:
+just an MLP</strong> with two fully-connected layers, ReLU activation, and squared loss.</p>
+<div class="codehilite"><pre><span></span><code><span class="c1"># Function for initializing the weights of the network</span>
+<span class="k">def</span> <span class="nf">init_weights</span><span class="p">(</span><span class="n">m</span><span class="p">):</span>
+    <span class="k">if</span> <span class="nb">type</span><span class="p">(</span><span class="n">m</span><span class="p">)</span> <span class="o">==</span> <span class="n">nn</span><span class="o">.</span><span class="n">Linear</span><span class="p">:</span>
+        <span class="n">nn</span><span class="o">.</span><span class="n">init</span><span class="o">.</span><span class="n">xavier_uniform_</span><span class="p">(</span><span class="n">m</span><span class="o">.</span><span class="n">weight</span><span class="p">)</span>
+
+<span class="c1"># A simple MLP</span>
+<span class="k">def</span> <span class="nf">get_net</span><span class="p">():</span>
+    <span class="n">net</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">Sequential</span><span class="p">(</span><span class="n">nn</span><span class="o">.</span><span class="n">Linear</span><span class="p">(</span><span class="mi">4</span><span class="p">,</span> <span class="mi">10</span><span class="p">),</span> <span class="n">nn</span><span class="o">.</span><span class="n">ReLU</span><span class="p">(),</span> <span class="n">nn</span><span class="o">.</span><span class="n">Linear</span><span class="p">(</span><span class="mi">10</span><span class="p">,</span> <span class="mi">1</span><span class="p">))</span>
+    <span class="n">net</span><span class="o">.</span><span class="n">apply</span><span class="p">(</span><span class="n">init_weights</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">net</span>
+
+<span class="c1"># Square loss</span>
+<span class="n">loss</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">MSELoss</span><span class="p">()</span>
+</code></pre></div>
+
+<p>Now we are ready to <strong>train the model</strong>. The code below is essentially identical to the training loop in previous sections.
+Thus, we will not delve into much detail.</p>
+<div class="codehilite"><pre><span></span><code><span class="k">def</span> <span class="nf">train</span><span class="p">(</span><span class="n">net</span><span class="p">,</span> <span class="n">train_iter</span><span class="p">,</span> <span class="n">loss</span><span class="p">,</span> <span class="n">epochs</span><span class="p">,</span> <span class="n">lr</span><span class="p">):</span>
+    <span class="n">trainer</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">optim</span><span class="o">.</span><span class="n">Adam</span><span class="p">(</span><span class="n">net</span><span class="o">.</span><span class="n">parameters</span><span class="p">(),</span> <span class="n">lr</span><span class="p">)</span>
+    <span class="k">for</span> <span class="n">epoch</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">epochs</span><span class="p">):</span>
+        <span class="k">for</span> <span class="n">X</span><span class="p">,</span> <span class="n">y</span> <span class="ow">in</span> <span class="n">train_iter</span><span class="p">:</span>
+            <span class="n">trainer</span><span class="o">.</span><span class="n">zero_grad</span><span class="p">()</span>
+            <span class="n">l</span> <span class="o">=</span> <span class="n">loss</span><span class="p">(</span><span class="n">net</span><span class="p">(</span><span class="n">X</span><span class="p">),</span> <span class="n">y</span><span class="p">)</span>
+            <span class="n">l</span><span class="o">.</span><span class="n">backward</span><span class="p">()</span>
+            <span class="n">trainer</span><span class="o">.</span><span class="n">step</span><span class="p">()</span>
+        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;epoch </span><span class="si">{</span><span class="n">epoch</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="si">}</span><span class="s1">, &#39;</span>
+              <span class="sa">f</span><span class="s1">&#39;loss: </span><span class="si">{</span><span class="n">d2l</span><span class="o">.</span><span class="n">evaluate_loss</span><span class="p">(</span><span class="n">net</span><span class="p">,</span><span class="w"> </span><span class="n">train_iter</span><span class="p">,</span><span class="w"> </span><span class="n">loss</span><span class="p">)</span><span class="si">:</span><span class="s1">f</span><span class="si">}</span><span class="s1">&#39;</span><span class="p">)</span>
+
+<span class="n">net</span> <span class="o">=</span> <span class="n">get_net</span><span class="p">()</span>
+<span class="n">train</span><span class="p">(</span><span class="n">net</span><span class="p">,</span> <span class="n">train_iter</span><span class="p">,</span> <span class="n">loss</span><span class="p">,</span> <span class="mi">5</span><span class="p">,</span> <span class="mf">0.01</span><span class="p">)</span>
+</code></pre></div>
+
+<div class="codehilite"><pre><span></span><code>epoch 1, loss: 0.059692
+epoch 2, loss: 0.051250
+epoch 3, loss: 0.050954
+epoch 4, loss: 0.047931
+epoch 5, loss: 0.046375
+</code></pre></div>
+
+<h2>Prediction</h2>
+<p>Since the training loss is small, we would expect our model to work well. Let us see what this means in practice. The first thing to check is how well the model is able to <strong>predict what happens just in the next time step</strong>,
+namely the <em>one-step-ahead prediction</em>.</p>
+<div class="codehilite"><pre><span></span><code><span class="n">onestep_preds</span> <span class="o">=</span> <span class="n">net</span><span class="p">(</span><span class="n">features</span><span class="p">)</span>
+<span class="n">d2l</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span>
+    <span class="p">[</span><span class="n">time</span><span class="p">,</span> <span class="n">time</span><span class="p">[</span><span class="n">tau</span><span class="p">:]],</span>
+    <span class="p">[</span><span class="n">x</span><span class="o">.</span><span class="n">detach</span><span class="p">()</span><span class="o">.</span><span class="n">numpy</span><span class="p">(),</span> <span class="n">onestep_preds</span><span class="o">.</span><span class="n">detach</span><span class="p">()</span><span class="o">.</span><span class="n">numpy</span><span class="p">()],</span> <span class="s1">&#39;time&#39;</span><span class="p">,</span> <span class="s1">&#39;x&#39;</span><span class="p">,</span>
+    <span class="n">legend</span><span class="o">=</span><span class="p">[</span><span class="s1">&#39;data&#39;</span><span class="p">,</span> <span class="s1">&#39;1-step preds&#39;</span><span class="p">],</span> <span class="n">xlim</span><span class="o">=</span><span class="p">[</span><span class="mi">1</span><span class="p">,</span> <span class="mi">1000</span><span class="p">],</span> <span class="n">figsize</span><span class="o">=</span><span class="p">(</span><span class="mi">6</span><span class="p">,</span> <span class="mi">3</span><span class="p">))</span>
+</code></pre></div>
+
+<p><img alt="svg" src="output_11_0.svg" /></p>
+<p>The one-step-ahead predictions look nice, just as we expected.
+Even beyond 604 (<code>n_train + tau</code>) observations the predictions still look trustworthy.
+However, there is just one little problem to this:
+if we observe sequence data only until time step 604, we cannot hope to receive the inputs for all the future one-step-ahead predictions.
+Instead, we need to work our way forward one step at a time:</p>
+<p>$$
+\hat{x}<em>{605} = f(x</em>{601}, x_{602}, x_{603}, x_{604}), \
+\hat{x}<em>{606} = f(x</em>{602}, x_{603}, x_{604}, \hat{x}<em>{605}), \
+\hat{x}</em>{607} = f(x_{603}, x_{604}, \hat{x}<em>{605}, \hat{x}</em>{606}),\
+\hat{x}<em>{608} = f(x</em>{604}, \hat{x}<em>{605}, \hat{x}</em>{606}, \hat{x}<em>{607}),\
+\hat{x}</em>{609} = f(\hat{x}<em>{605}, \hat{x}</em>{606}, \hat{x}<em>{607}, \hat{x}</em>{608}),\
+\ldots
+$$</p>
+<p>Generally, for an observed sequence up to $x_t$, its predicted output $\hat{x}<em>{t+k}$ at time step $t+k$ is called the $k$<em>-step-ahead prediction</em>. Since we have observed up to $x</em>{604}$, its $k$-step-ahead prediction is $\hat{x}_{604+k}$.
+In other words, we will have to <strong>use our own predictions to make multistep-ahead predictions</strong>.
+Let us see how well this goes.</p>
+<div class="codehilite"><pre><span></span><code><span class="n">multistep_preds</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="n">T</span><span class="p">)</span>
+<span class="n">multistep_preds</span><span class="p">[:</span><span class="n">n_train</span> <span class="o">+</span> <span class="n">tau</span><span class="p">]</span> <span class="o">=</span> <span class="n">x</span><span class="p">[:</span><span class="n">n_train</span> <span class="o">+</span> <span class="n">tau</span><span class="p">]</span>
+<span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">n_train</span> <span class="o">+</span> <span class="n">tau</span><span class="p">,</span> <span class="n">T</span><span class="p">):</span>
+    <span class="n">multistep_preds</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">net</span><span class="p">(</span><span class="n">multistep_preds</span><span class="p">[</span><span class="n">i</span> <span class="o">-</span> <span class="n">tau</span><span class="p">:</span><span class="n">i</span><span class="p">]</span><span class="o">.</span><span class="n">reshape</span><span class="p">((</span><span class="mi">1</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">)))</span>
+</code></pre></div>
+
+<div class="codehilite"><pre><span></span><code><span class="n">d2l</span><span class="o">.</span><span class="n">plot</span><span class="p">([</span><span class="n">time</span><span class="p">,</span> <span class="n">time</span><span class="p">[</span><span class="n">tau</span><span class="p">:],</span> <span class="n">time</span><span class="p">[</span><span class="n">n_train</span> <span class="o">+</span> <span class="n">tau</span><span class="p">:]],</span> <span class="p">[</span>
+    <span class="n">x</span><span class="o">.</span><span class="n">detach</span><span class="p">()</span><span class="o">.</span><span class="n">numpy</span><span class="p">(),</span>
+    <span class="n">onestep_preds</span><span class="o">.</span><span class="n">detach</span><span class="p">()</span><span class="o">.</span><span class="n">numpy</span><span class="p">(),</span>
+    <span class="n">multistep_preds</span><span class="p">[</span><span class="n">n_train</span> <span class="o">+</span> <span class="n">tau</span><span class="p">:]</span><span class="o">.</span><span class="n">detach</span><span class="p">()</span><span class="o">.</span><span class="n">numpy</span><span class="p">()],</span> <span class="s1">&#39;time&#39;</span><span class="p">,</span> <span class="s1">&#39;x&#39;</span><span class="p">,</span>
+         <span class="n">legend</span><span class="o">=</span><span class="p">[</span><span class="s1">&#39;data&#39;</span><span class="p">,</span> <span class="s1">&#39;1-step preds&#39;</span><span class="p">,</span>
+                 <span class="s1">&#39;multistep preds&#39;</span><span class="p">],</span> <span class="n">xlim</span><span class="o">=</span><span class="p">[</span><span class="mi">1</span><span class="p">,</span> <span class="mi">1000</span><span class="p">],</span> <span class="n">figsize</span><span class="o">=</span><span class="p">(</span><span class="mi">6</span><span class="p">,</span> <span class="mi">3</span><span class="p">))</span>
+</code></pre></div>
+
+<p><img alt="svg" src="output_14_0.svg" /></p>
+<p>As the above example shows, this is a spectacular failure. The predictions decay to a constant pretty quickly after a few prediction steps.
+Why did the algorithm work so poorly?
+This is ultimately due to the fact that the errors build up.
+Let us say that after step 1 we have some error $\epsilon_1 = \bar\epsilon$.
+Now the <em>input</em> for step 2 is perturbed by $\epsilon_1$, hence we suffer some error in the order of $\epsilon_2 = \bar\epsilon + c \epsilon_1$ for some constant $c$, and so on. The error can diverge rather rapidly from the true observations. This is a common phenomenon. For instance, weather forecasts for the next 24 hours tend to be pretty accurate but beyond that the accuracy declines rapidly. We will discuss methods for improving this throughout this chapter and beyond.</p>
+<p>Let us <strong>take a closer look at the difficulties in $k$-step-ahead predictions</strong>
+by computing predictions on the entire sequence for $k = 1, 4, 16, 64$.</p>
+<div class="codehilite"><pre><span></span><code><span class="n">max_steps</span> <span class="o">=</span> <span class="mi">64</span>
+</code></pre></div>
+
+<div class="codehilite"><pre><span></span><code><span class="n">features</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="n">T</span> <span class="o">-</span> <span class="n">tau</span> <span class="o">-</span> <span class="n">max_steps</span> <span class="o">+</span> <span class="mi">1</span><span class="p">,</span> <span class="n">tau</span> <span class="o">+</span> <span class="n">max_steps</span><span class="p">))</span>
+<span class="c1"># Column `i` (`i` &lt; `tau`) are observations from `x` for time steps from</span>
+<span class="c1"># `i + 1` to `i + T - tau - max_steps + 1`</span>
+<span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">tau</span><span class="p">):</span>
+    <span class="n">features</span><span class="p">[:,</span> <span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">x</span><span class="p">[</span><span class="n">i</span><span class="p">:</span><span class="n">i</span> <span class="o">+</span> <span class="n">T</span> <span class="o">-</span> <span class="n">tau</span> <span class="o">-</span> <span class="n">max_steps</span> <span class="o">+</span> <span class="mi">1</span><span class="p">]</span>
+
+<span class="c1"># Column `i` (`i` &gt;= `tau`) are the (`i - tau + 1`)-step-ahead predictions for</span>
+<span class="c1"># time steps from `i + 1` to `i + T - tau - max_steps + 1`</span>
+<span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">tau</span><span class="p">,</span> <span class="n">tau</span> <span class="o">+</span> <span class="n">max_steps</span><span class="p">):</span>
+    <span class="n">features</span><span class="p">[:,</span> <span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">net</span><span class="p">(</span><span class="n">features</span><span class="p">[:,</span> <span class="n">i</span> <span class="o">-</span> <span class="n">tau</span><span class="p">:</span><span class="n">i</span><span class="p">])</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">)</span>
+</code></pre></div>
+
+<div class="codehilite"><pre><span></span><code><span class="n">steps</span> <span class="o">=</span> <span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">4</span><span class="p">,</span> <span class="mi">16</span><span class="p">,</span> <span class="mi">64</span><span class="p">)</span>
+<span class="n">d2l</span><span class="o">.</span><span class="n">plot</span><span class="p">([</span><span class="n">time</span><span class="p">[</span><span class="n">tau</span> <span class="o">+</span> <span class="n">i</span> <span class="o">-</span> <span class="mi">1</span><span class="p">:</span><span class="n">T</span> <span class="o">-</span> <span class="n">max_steps</span> <span class="o">+</span> <span class="n">i</span><span class="p">]</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">steps</span><span class="p">],</span>
+         <span class="p">[</span><span class="n">features</span><span class="p">[:,</span> <span class="p">(</span><span class="n">tau</span> <span class="o">+</span> <span class="n">i</span> <span class="o">-</span> <span class="mi">1</span><span class="p">)]</span><span class="o">.</span><span class="n">detach</span><span class="p">()</span><span class="o">.</span><span class="n">numpy</span><span class="p">()</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">steps</span><span class="p">],</span> <span class="s1">&#39;time&#39;</span><span class="p">,</span>
+         <span class="s1">&#39;x&#39;</span><span class="p">,</span> <span class="n">legend</span><span class="o">=</span><span class="p">[</span><span class="sa">f</span><span class="s1">&#39;</span><span class="si">{</span><span class="n">i</span><span class="si">}</span><span class="s1">-step preds&#39;</span>
+                      <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">steps</span><span class="p">],</span> <span class="n">xlim</span><span class="o">=</span><span class="p">[</span><span class="mi">5</span><span class="p">,</span> <span class="mi">1000</span><span class="p">],</span> <span class="n">figsize</span><span class="o">=</span><span class="p">(</span><span class="mi">6</span><span class="p">,</span> <span class="mi">3</span><span class="p">))</span>
+</code></pre></div>
+
+<p><img alt="svg" src="output_18_0.svg" /></p>
+<p>This clearly illustrates how the quality of the prediction changes as we try to predict further into the future.
+While the 4-step-ahead predictions still look good, anything beyond that is almost useless.</p>
+<h2>Summary</h2>
+<ul>
+<li>There is quite a difference in difficulty between interpolation and extrapolation. Consequently, if you have a sequence, always respect the temporal order of the data when training, i.e., never train on future data.</li>
+<li>Sequence models require specialized statistical tools for estimation. Two popular choices are autoregressive models and latent-variable autoregressive models.</li>
+<li>For causal models (e.g., time going forward), estimating the forward direction is typically a lot easier than the reverse direction.</li>
+<li>For an observed sequence up to time step $t$, its predicted output at time step $t+k$ is the $k$<em>-step-ahead prediction</em>. As we predict further in time by increasing $k$, the errors accumulate and the quality of the prediction degrades, often dramatically.</li>
+</ul>
+<h2>Exercises</h2>
+<ol>
+<li>
+<p>Improve the model in the experiment of this section.</p>
+<p>a). Incorporate more than the past 4 observations? What do you observe?</p>
+</li>
+</ol>
+<p>b) Change the neural network architecture and evaluate the performance.</p>
+<ol>
+<li>Give an example for when a latent autoregressive model might be needed to capture the dynamic of the data.</li>
+</ol>
+<p><a href="https://discuss.d2l.ai/t/114">Discussions</a></p>
+</body>
+</html>

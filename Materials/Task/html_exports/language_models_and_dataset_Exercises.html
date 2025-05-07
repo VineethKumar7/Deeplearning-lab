@@ -1,0 +1,462 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8"/>
+  <title>language_models_and_dataset_Exercises.ipynb</title>
+</head>
+<body>
+<h1>Language Models and the Dataset</h1>
+<p>In the notebook before, we see how to map text data into tokens, where these tokens can be viewed as a sequence of discrete observations, such as words or characters.
+Assume that the tokens in a text sequence of length $T$ are in turn $x_1, x_2, \ldots, x_T$. 
+Then, in the text sequence,
+$x_t$($1 \leq t \leq T$) can be considered as the observation or label at time step $t$. Given such a text sequence,
+the goal of a <em>language model</em> is to estimate the joint probability of the sequence</p>
+<p>$$P(x_1, x_2, \ldots, x_T).$$</p>
+<p>Language models are incredibly useful. For instance, an ideal language model would be able to generate natural text just on its own, simply by drawing one token at a time $x_t \sim P(x_t \mid x_{t-1}, \ldots, x_1)$.
+Quite unlike the monkey using a typewriter, all text emerging from such a model would pass as natural language, e.g., English text. Furthermore, it would be sufficient for generating a meaningful dialog, simply by conditioning the text on previous dialog fragments.
+Clearly we are still very far from designing such a system, since it would need to <em>understand</em> the text rather than just generate grammatically sensible content.</p>
+<p>Nonetheless, language models are of great service even in their limited form.
+For instance, the phrases "to recognize speech" and "to wreck a nice beach" sound very similar.
+This can cause ambiguity in speech recognition,
+which is easily resolved through a language model that rejects the second translation as outlandish.
+Likewise, in a document summarization algorithm
+it is worthwhile knowing that "dog bites man" is much more frequent than "man bites dog", or that "I want to eat grandma" is a rather disturbing statement, whereas "I want to eat, grandma" is much more benign.</p>
+<h2>Learning a Language Model</h2>
+<p>The obvious question is how we should model a document, or even a sequence of tokens. 
+Suppose that we tokenize text data at the word level.
+We can take recourse to the analysis we applied to sequence models.
+Let us start by applying basic probability rules:</p>
+<p>$$P(x_1, x_2, \ldots, x_T) = \prod_{t=1}^T P(x_t  \mid  x_1, \ldots, x_{t-1}).$$</p>
+<p>For example, 
+the probability of a text sequence containing four words would be given as:</p>
+<p>$$P(\text{deep}, \text{learning}, \text{is}, \text{fun}) =  P(\text{deep}) P(\text{learning}  \mid  \text{deep}) P(\text{is}  \mid  \text{deep}, \text{learning}) P(\text{fun}  \mid  \text{deep}, \text{learning}, \text{is}).$$</p>
+<p>In order to compute the language model, we need to calculate the
+probability of words and the conditional probability of a word given
+the previous few words.
+Such probabilities are essentially
+language model parameters.</p>
+<p>Here, we
+assume that the training dataset is a large text corpus, such as all
+Wikipedia entries, <a href="https://en.wikipedia.org/wiki/Project_Gutenberg">Project Gutenberg</a>,
+and all text posted on the
+Web.
+The probability of words can be calculated from the relative word
+frequency of a given word in the training dataset.
+For example, the estimate $\hat{P}(\text{deep})$ can be calculated as the
+probability of any sentence starting with the word "deep". A
+slightly less accurate approach would be to count all occurrences of
+the word "deep" and divide it by the total number of words in
+the corpus.
+This works fairly well, particularly for frequent
+words. Moving on, we could attempt to estimate</p>
+<p>$$\hat{P}(\text{learning} \mid \text{deep}) = \frac{n(\text{deep, learning})}{n(\text{deep})},$$</p>
+<p>where $n(x)$ and $n(x, x')$ are the number of occurrences of singletons
+and consecutive word pairs, respectively.
+Unfortunately, estimating the
+probability of a word pair is somewhat more difficult, since the
+occurrences of "deep learning" are a lot less frequent. In
+particular, for some unusual word combinations it may be tricky to
+find enough occurrences to get accurate estimates.
+Things take a turn for the worse for three-word combinations and beyond.
+There will be many plausible three-word combinations that we likely will not see in our dataset.
+Unless we provide some solution to assign such word combinations nonzero count, we will not be able to use them in a language model. If the dataset is small or if the words are very rare, we might not find even a single one of them.</p>
+<p>A common strategy is to perform some form of <em>Laplace smoothing</em>.
+The solution is to
+add a small constant to all counts. 
+Denote by $n$ the total number of words in
+the training set
+and $m$ the number of unique words.
+This solution helps with singletons, e.g., via</p>
+<p>$$\begin{aligned}
+    \hat{P}(x) &amp; = \frac{n(x) + \epsilon_1/m}{n + \epsilon_1}, \
+    \hat{P}(x' \mid x) &amp; = \frac{n(x, x') + \epsilon_2 \hat{P}(x')}{n(x) + \epsilon_2}, \
+    \hat{P}(x'' \mid x,x') &amp; = \frac{n(x, x',x'') + \epsilon_3 \hat{P}(x'')}{n(x, x') + \epsilon_3}.
+\end{aligned}$$</p>
+<p>Here $\epsilon_1,\epsilon_2$, and $\epsilon_3$ are hyperparameters.
+Take $\epsilon_1$ as an example:
+when $\epsilon_1 = 0$, no smoothing is applied;
+when $\epsilon_1$ approaches positive infinity,
+$\hat{P}(x)$ approaches the uniform probability $1/m$. 
+The above is a rather primitive variant of what
+other techniques can accomplish <code>Wood.Gasthaus.Archambeau.ea.2011</code>.</p>
+<p>Unfortunately, models like this get unwieldy rather quickly
+for the following reasons. First, we need to store all counts.
+Second, this entirely ignores the meaning of the words. For
+instance, "cat" and "feline" should occur in related contexts.
+It is quite difficult to adjust such models to additional contexts,
+whereas, deep learning based language models are well suited to
+take this into account.
+Last, long word
+sequences are almost certain to be novel, hence a model that simply
+counts the frequency of previously seen word sequences is bound to perform poorly there.</p>
+<h2>Markov Models and $n$-grams</h2>
+<p>Before we discuss solutions involving deep learning, we need some more terminology and concepts.
+Let us apply this to language modeling. A distribution over sequences satisfies the Markov property of first order if $P(x_{t+1} \mid x_t, \ldots, x_1) = P(x_{t+1} \mid x_t)$. Higher orders correspond to longer dependencies. This leads to a number of approximations that we could apply to model a sequence:</p>
+<p>$$
+\begin{aligned}
+P(x_1, x_2, x_3, x_4) &amp;=  P(x_1) P(x_2) P(x_3) P(x_4),\
+P(x_1, x_2, x_3, x_4) &amp;=  P(x_1) P(x_2  \mid  x_1) P(x_3  \mid  x_2) P(x_4  \mid  x_3),\
+P(x_1, x_2, x_3, x_4) &amp;=  P(x_1) P(x_2  \mid  x_1) P(x_3  \mid  x_1, x_2) P(x_4  \mid  x_2, x_3).
+\end{aligned}
+$$</p>
+<p>The probability formulae that involve one, two, and three variables are typically referred to as <em>unigram</em>, <em>bigram</em>, and <em>trigram</em> models, respectively. In the following, we will learn how to design better models.</p>
+<h2>Natural Language Statistics</h2>
+<p>Let us see how this works on real data.
+We construct a vocabulary based on the time machine dataset as introduced before 
+and print the top 10 most frequent words.</p>
+<div class="codehilite"><pre><span></span><code><span class="c1"># You need the following line of code only if you use Google colab</span>
+<span class="err">!</span> <span class="n">pip</span> <span class="n">install</span> <span class="n">d2l</span>
+<span class="kn">import</span> <span class="nn">random</span>
+<span class="kn">import</span> <span class="nn">torch</span>
+<span class="kn">from</span> <span class="nn">d2l</span> <span class="kn">import</span> <span class="n">torch</span> <span class="k">as</span> <span class="n">d2l</span>
+</code></pre></div>
+
+<div class="codehilite"><pre><span></span><code><span class="n">Collecting</span><span class="w"> </span><span class="n">d2l</span>
+<span class="w">  </span><span class="n">Downloading</span><span class="w"> </span><span class="n">d2l</span><span class="o">-</span><span class="mf">0.17</span><span class="o">.</span><span class="mi">0</span><span class="o">-</span><span class="n">py3</span><span class="o">-</span><span class="n">none</span><span class="o">-</span><span class="n">any</span><span class="o">.</span><span class="n">whl</span><span class="w"> </span><span class="p">(</span><span class="mi">83</span><span class="w"> </span><span class="n">kB</span><span class="p">)</span>
+<span class="err"></span><span class="p">[</span><span class="err">?</span><span class="mi">25</span><span class="n">l</span>
+</code></pre></div>
+
+<p>[K     |████                            | 10 kB 26.0 MB/s eta 0:00:01
+[K     |███████▉                        | 20 kB 31.3 MB/s eta 0:00:01
+[K     |███████████▉                    | 30 kB 32.3 MB/s eta 0:00:01
+[K     |███████████████▊                | 40 kB 22.9 MB/s eta 0:00:01
+[K     |███████████████████▊            | 51 kB 9.3 MB/s eta 0:00:01
+[K     |███████████████████████▋        | 61 kB 9.8 MB/s eta 0:00:01
+[K     |███████████████████████████▋    | 71 kB 8.2 MB/s eta 0:00:01
+[K     |███████████████████████████████▌| 81 kB 9.1 MB/s eta 0:00:01
+[K     |████████████████████████████████| 83 kB 1.3 MB/s 
+    [?25hRequirement already satisfied: requests in /usr/local/lib/python3.7/dist-packages (from d2l) (2.23.0)
+    Requirement already satisfied: matplotlib in /usr/local/lib/python3.7/dist-packages (from d2l) (3.2.2)
+    Requirement already satisfied: pandas in /usr/local/lib/python3.7/dist-packages (from d2l) (1.1.5)
+    Requirement already satisfied: numpy in /usr/local/lib/python3.7/dist-packages (from d2l) (1.19.5)
+    Requirement already satisfied: jupyter in /usr/local/lib/python3.7/dist-packages (from d2l) (1.0.0)
+    Requirement already satisfied: nbconvert in /usr/local/lib/python3.7/dist-packages (from jupyter-&gt;d2l) (5.6.1)
+    Requirement already satisfied: ipywidgets in /usr/local/lib/python3.7/dist-packages (from jupyter-&gt;d2l) (7.6.5)
+    Requirement already satisfied: jupyter-console in /usr/local/lib/python3.7/dist-packages (from jupyter-&gt;d2l) (5.2.0)
+    Requirement already satisfied: ipykernel in /usr/local/lib/python3.7/dist-packages (from jupyter-&gt;d2l) (4.10.1)
+    Requirement already satisfied: qtconsole in /usr/local/lib/python3.7/dist-packages (from jupyter-&gt;d2l) (5.2.0)
+    Requirement already satisfied: notebook in /usr/local/lib/python3.7/dist-packages (from jupyter-&gt;d2l) (5.3.1)
+    Requirement already satisfied: tornado&gt;=4.0 in /usr/local/lib/python3.7/dist-packages (from ipykernel-&gt;jupyter-&gt;d2l) (5.1.1)
+    Requirement already satisfied: jupyter-client in /usr/local/lib/python3.7/dist-packages (from ipykernel-&gt;jupyter-&gt;d2l) (5.3.5)
+    Requirement already satisfied: ipython&gt;=4.0.0 in /usr/local/lib/python3.7/dist-packages (from ipykernel-&gt;jupyter-&gt;d2l) (5.5.0)
+    Requirement already satisfied: traitlets&gt;=4.1.0 in /usr/local/lib/python3.7/dist-packages (from ipykernel-&gt;jupyter-&gt;d2l) (5.1.1)
+    Requirement already satisfied: pexpect in /usr/local/lib/python3.7/dist-packages (from ipython&gt;=4.0.0-&gt;ipykernel-&gt;jupyter-&gt;d2l) (4.8.0)
+    Requirement already satisfied: simplegeneric&gt;0.8 in /usr/local/lib/python3.7/dist-packages (from ipython&gt;=4.0.0-&gt;ipykernel-&gt;jupyter-&gt;d2l) (0.8.1)
+    Requirement already satisfied: prompt-toolkit&lt;2.0.0,&gt;=1.0.4 in /usr/local/lib/python3.7/dist-packages (from ipython&gt;=4.0.0-&gt;ipykernel-&gt;jupyter-&gt;d2l) (1.0.18)
+    Requirement already satisfied: decorator in /usr/local/lib/python3.7/dist-packages (from ipython&gt;=4.0.0-&gt;ipykernel-&gt;jupyter-&gt;d2l) (4.4.2)
+    Requirement already satisfied: pygments in /usr/local/lib/python3.7/dist-packages (from ipython&gt;=4.0.0-&gt;ipykernel-&gt;jupyter-&gt;d2l) (2.6.1)
+    Requirement already satisfied: pickleshare in /usr/local/lib/python3.7/dist-packages (from ipython&gt;=4.0.0-&gt;ipykernel-&gt;jupyter-&gt;d2l) (0.7.5)
+    Requirement already satisfied: setuptools&gt;=18.5 in /usr/local/lib/python3.7/dist-packages (from ipython&gt;=4.0.0-&gt;ipykernel-&gt;jupyter-&gt;d2l) (57.4.0)
+    Requirement already satisfied: wcwidth in /usr/local/lib/python3.7/dist-packages (from prompt-toolkit&lt;2.0.0,&gt;=1.0.4-&gt;ipython&gt;=4.0.0-&gt;ipykernel-&gt;jupyter-&gt;d2l) (0.2.5)
+    Requirement already satisfied: six&gt;=1.9.0 in /usr/local/lib/python3.7/dist-packages (from prompt-toolkit&lt;2.0.0,&gt;=1.0.4-&gt;ipython&gt;=4.0.0-&gt;ipykernel-&gt;jupyter-&gt;d2l) (1.15.0)
+    Requirement already satisfied: nbformat&gt;=4.2.0 in /usr/local/lib/python3.7/dist-packages (from ipywidgets-&gt;jupyter-&gt;d2l) (5.1.3)
+    Requirement already satisfied: jupyterlab-widgets&gt;=1.0.0 in /usr/local/lib/python3.7/dist-packages (from ipywidgets-&gt;jupyter-&gt;d2l) (1.0.2)
+    Requirement already satisfied: ipython-genutils~=0.2.0 in /usr/local/lib/python3.7/dist-packages (from ipywidgets-&gt;jupyter-&gt;d2l) (0.2.0)
+    Requirement already satisfied: widgetsnbextension~=3.5.0 in /usr/local/lib/python3.7/dist-packages (from ipywidgets-&gt;jupyter-&gt;d2l) (3.5.2)
+    Requirement already satisfied: jsonschema!=2.5.0,&gt;=2.4 in /usr/local/lib/python3.7/dist-packages (from nbformat&gt;=4.2.0-&gt;ipywidgets-&gt;jupyter-&gt;d2l) (2.6.0)
+    Requirement already satisfied: jupyter-core in /usr/local/lib/python3.7/dist-packages (from nbformat&gt;=4.2.0-&gt;ipywidgets-&gt;jupyter-&gt;d2l) (4.9.1)
+    Requirement already satisfied: jinja2 in /usr/local/lib/python3.7/dist-packages (from notebook-&gt;jupyter-&gt;d2l) (2.11.3)
+    Requirement already satisfied: Send2Trash in /usr/local/lib/python3.7/dist-packages (from notebook-&gt;jupyter-&gt;d2l) (1.8.0)
+    Requirement already satisfied: terminado&gt;=0.8.1 in /usr/local/lib/python3.7/dist-packages (from notebook-&gt;jupyter-&gt;d2l) (0.12.1)
+    Requirement already satisfied: pyzmq&gt;=13 in /usr/local/lib/python3.7/dist-packages (from jupyter-client-&gt;ipykernel-&gt;jupyter-&gt;d2l) (22.3.0)
+    Requirement already satisfied: python-dateutil&gt;=2.1 in /usr/local/lib/python3.7/dist-packages (from jupyter-client-&gt;ipykernel-&gt;jupyter-&gt;d2l) (2.8.2)
+    Requirement already satisfied: ptyprocess in /usr/local/lib/python3.7/dist-packages (from terminado&gt;=0.8.1-&gt;notebook-&gt;jupyter-&gt;d2l) (0.7.0)
+    Requirement already satisfied: MarkupSafe&gt;=0.23 in /usr/local/lib/python3.7/dist-packages (from jinja2-&gt;notebook-&gt;jupyter-&gt;d2l) (2.0.1)
+    Requirement already satisfied: pyparsing!=2.0.4,!=2.1.2,!=2.1.6,&gt;=2.0.1 in /usr/local/lib/python3.7/dist-packages (from matplotlib-&gt;d2l) (3.0.6)
+    Requirement already satisfied: cycler&gt;=0.10 in /usr/local/lib/python3.7/dist-packages (from matplotlib-&gt;d2l) (0.11.0)
+    Requirement already satisfied: kiwisolver&gt;=1.0.1 in /usr/local/lib/python3.7/dist-packages (from matplotlib-&gt;d2l) (1.3.2)
+    Requirement already satisfied: defusedxml in /usr/local/lib/python3.7/dist-packages (from nbconvert-&gt;jupyter-&gt;d2l) (0.7.1)
+    Requirement already satisfied: testpath in /usr/local/lib/python3.7/dist-packages (from nbconvert-&gt;jupyter-&gt;d2l) (0.5.0)
+    Requirement already satisfied: bleach in /usr/local/lib/python3.7/dist-packages (from nbconvert-&gt;jupyter-&gt;d2l) (4.1.0)
+    Requirement already satisfied: mistune&lt;2,&gt;=0.8.1 in /usr/local/lib/python3.7/dist-packages (from nbconvert-&gt;jupyter-&gt;d2l) (0.8.4)
+    Requirement already satisfied: pandocfilters&gt;=1.4.1 in /usr/local/lib/python3.7/dist-packages (from nbconvert-&gt;jupyter-&gt;d2l) (1.5.0)
+    Requirement already satisfied: entrypoints&gt;=0.2.2 in /usr/local/lib/python3.7/dist-packages (from nbconvert-&gt;jupyter-&gt;d2l) (0.3)
+    Requirement already satisfied: packaging in /usr/local/lib/python3.7/dist-packages (from bleach-&gt;nbconvert-&gt;jupyter-&gt;d2l) (21.3)
+    Requirement already satisfied: webencodings in /usr/local/lib/python3.7/dist-packages (from bleach-&gt;nbconvert-&gt;jupyter-&gt;d2l) (0.5.1)
+    Requirement already satisfied: pytz&gt;=2017.2 in /usr/local/lib/python3.7/dist-packages (from pandas-&gt;d2l) (2018.9)
+    Requirement already satisfied: qtpy in /usr/local/lib/python3.7/dist-packages (from qtconsole-&gt;jupyter-&gt;d2l) (1.11.2)
+    Requirement already satisfied: certifi&gt;=2017.4.17 in /usr/local/lib/python3.7/dist-packages (from requests-&gt;d2l) (2021.10.8)
+    Requirement already satisfied: idna&lt;3,&gt;=2.5 in /usr/local/lib/python3.7/dist-packages (from requests-&gt;d2l) (2.10)
+    Requirement already satisfied: chardet&lt;4,&gt;=3.0.2 in /usr/local/lib/python3.7/dist-packages (from requests-&gt;d2l) (3.0.4)
+    Requirement already satisfied: urllib3!=1.25.0,!=1.25.1,&lt;1.26,&gt;=1.21.1 in /usr/local/lib/python3.7/dist-packages (from requests-&gt;d2l) (1.24.3)
+    Installing collected packages: d2l
+    Successfully installed d2l-0.17.0</p>
+<div class="codehilite"><pre><span></span><code><span class="n">tokens</span> <span class="o">=</span> <span class="n">d2l</span><span class="o">.</span><span class="n">tokenize</span><span class="p">(</span><span class="n">d2l</span><span class="o">.</span><span class="n">read_time_machine</span><span class="p">())</span>
+<span class="c1"># Since each text line is not necessarily a sentence or a paragraph, we</span>
+<span class="c1"># concatenate all text lines</span>
+<span class="n">corpus</span> <span class="o">=</span> <span class="p">[</span><span class="n">token</span> <span class="k">for</span> <span class="n">line</span> <span class="ow">in</span> <span class="n">tokens</span> <span class="k">for</span> <span class="n">token</span> <span class="ow">in</span> <span class="n">line</span><span class="p">]</span>
+<span class="n">vocab</span> <span class="o">=</span> <span class="n">d2l</span><span class="o">.</span><span class="n">Vocab</span><span class="p">(</span><span class="n">corpus</span><span class="p">)</span>
+<span class="n">vocab</span><span class="o">.</span><span class="n">token_freqs</span><span class="p">[:</span><span class="mi">10</span><span class="p">]</span>
+</code></pre></div>
+
+<div class="codehilite"><pre><span></span><code><span class="n">Downloading</span><span class="w"> </span><span class="o">../</span><span class="n">data</span><span class="o">/</span><span class="n">timemachine</span><span class="o">.</span><span class="n">txt</span><span class="w"> </span><span class="n">from</span><span class="w"> </span><span class="n">http</span><span class="p">:</span><span class="o">//</span><span class="n">d2l</span><span class="o">-</span><span class="n">data</span><span class="o">.</span><span class="n">s3</span><span class="o">-</span><span class="n">accelerate</span><span class="o">.</span><span class="n">amazonaws</span><span class="o">.</span><span class="n">com</span><span class="o">/</span><span class="n">timemachine</span><span class="o">.</span><span class="n">txt</span><span class="o">...</span>
+
+
+
+
+
+<span class="p">[(</span><span class="s1">&#39;the&#39;</span><span class="p">,</span><span class="w"> </span><span class="mi">2261</span><span class="p">),</span>
+<span class="w"> </span><span class="p">(</span><span class="s1">&#39;i&#39;</span><span class="p">,</span><span class="w"> </span><span class="mi">1267</span><span class="p">),</span>
+<span class="w"> </span><span class="p">(</span><span class="s1">&#39;and&#39;</span><span class="p">,</span><span class="w"> </span><span class="mi">1245</span><span class="p">),</span>
+<span class="w"> </span><span class="p">(</span><span class="s1">&#39;of&#39;</span><span class="p">,</span><span class="w"> </span><span class="mi">1155</span><span class="p">),</span>
+<span class="w"> </span><span class="p">(</span><span class="s1">&#39;a&#39;</span><span class="p">,</span><span class="w"> </span><span class="mi">816</span><span class="p">),</span>
+<span class="w"> </span><span class="p">(</span><span class="s1">&#39;to&#39;</span><span class="p">,</span><span class="w"> </span><span class="mi">695</span><span class="p">),</span>
+<span class="w"> </span><span class="p">(</span><span class="s1">&#39;was&#39;</span><span class="p">,</span><span class="w"> </span><span class="mi">552</span><span class="p">),</span>
+<span class="w"> </span><span class="p">(</span><span class="s1">&#39;in&#39;</span><span class="p">,</span><span class="w"> </span><span class="mi">541</span><span class="p">),</span>
+<span class="w"> </span><span class="p">(</span><span class="s1">&#39;that&#39;</span><span class="p">,</span><span class="w"> </span><span class="mi">443</span><span class="p">),</span>
+<span class="w"> </span><span class="p">(</span><span class="s1">&#39;my&#39;</span><span class="p">,</span><span class="w"> </span><span class="mi">440</span><span class="p">)]</span>
+</code></pre></div>
+
+<p>As we can see, <strong>the most popular words are</strong> actually quite boring to look at.
+They are often referred to as <strong><em>stop words</em></strong> and thus filtered out.
+Nonetheless, they still carry meaning and we will still use them.
+Besides, it is quite clear that the word frequency decays rather rapidly. The $10^{\mathrm{th}}$ most frequent word is less than $1/5$ as common as the most popular one. To get a better idea, we <strong>plot the figure of the word frequency</strong>.</p>
+<div class="codehilite"><pre><span></span><code><span class="n">freqs</span> <span class="o">=</span> <span class="p">[</span><span class="n">freq</span> <span class="k">for</span> <span class="n">token</span><span class="p">,</span> <span class="n">freq</span> <span class="ow">in</span> <span class="n">vocab</span><span class="o">.</span><span class="n">token_freqs</span><span class="p">]</span>
+<span class="n">d2l</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="n">freqs</span><span class="p">,</span> <span class="n">xlabel</span><span class="o">=</span><span class="s1">&#39;token: x&#39;</span><span class="p">,</span> <span class="n">ylabel</span><span class="o">=</span><span class="s1">&#39;frequency: n(x)&#39;</span><span class="p">,</span> <span class="n">xscale</span><span class="o">=</span><span class="s1">&#39;log&#39;</span><span class="p">,</span>
+         <span class="n">yscale</span><span class="o">=</span><span class="s1">&#39;log&#39;</span><span class="p">)</span>
+</code></pre></div>
+
+<p><img alt="svg" src="output_4_0.svg" /></p>
+<p>We are on to something quite fundamental here: the word frequency decays rapidly in a well-defined way.
+After dealing with the first few words as exceptions, all the remaining words roughly follow a straight line on a log-log plot. This means that words satisfy <em>Zipf's law</em>,
+which states that the frequency $n_i$ of the $i^\mathrm{th}$ most frequent word
+is:</p>
+<p>$$n_i \propto \frac{1}{i^\alpha},$$</p>
+<p>which is equivalent to</p>
+<p>$$\log n_i = -\alpha \log i + c,$$</p>
+<p>where $\alpha$ is the exponent that characterizes the distribution and $c$ is a constant.
+This should already give us pause if we want to model words by counting statistics and smoothing.
+After all, we will significantly overestimate the frequency of the tail, also known as the infrequent words. But <strong>what about the other word combinations, such as bigrams, trigrams</strong>, and beyond?
+Let us see whether the bigram frequency behaves in the same manner as the unigram frequency.</p>
+<div class="codehilite"><pre><span></span><code><span class="n">bigram_tokens</span> <span class="o">=</span> <span class="p">[</span><span class="n">pair</span> <span class="k">for</span> <span class="n">pair</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="n">corpus</span><span class="p">[:</span><span class="o">-</span><span class="mi">1</span><span class="p">],</span> <span class="n">corpus</span><span class="p">[</span><span class="mi">1</span><span class="p">:])]</span>
+<span class="n">bigram_vocab</span> <span class="o">=</span> <span class="n">d2l</span><span class="o">.</span><span class="n">Vocab</span><span class="p">(</span><span class="n">bigram_tokens</span><span class="p">)</span>
+<span class="n">bigram_vocab</span><span class="o">.</span><span class="n">token_freqs</span><span class="p">[:</span><span class="mi">10</span><span class="p">]</span>
+</code></pre></div>
+
+<div class="codehilite"><pre><span></span><code>[((&#39;of&#39;, &#39;the&#39;), 309),
+ ((&#39;in&#39;, &#39;the&#39;), 169),
+ ((&#39;i&#39;, &#39;had&#39;), 130),
+ ((&#39;i&#39;, &#39;was&#39;), 112),
+ ((&#39;and&#39;, &#39;the&#39;), 109),
+ ((&#39;the&#39;, &#39;time&#39;), 102),
+ ((&#39;it&#39;, &#39;was&#39;), 99),
+ ((&#39;to&#39;, &#39;the&#39;), 85),
+ ((&#39;as&#39;, &#39;i&#39;), 78),
+ ((&#39;of&#39;, &#39;a&#39;), 73)]
+</code></pre></div>
+
+<p>One thing is notable here. Out of the ten most frequent word pairs, nine are composed of both stop words and only one is relevant to the actual book---"the time". Furthermore, let us see whether the trigram frequency behaves in the same manner.</p>
+<div class="codehilite"><pre><span></span><code><span class="n">trigram_tokens</span> <span class="o">=</span> <span class="p">[</span>
+    <span class="n">triple</span> <span class="k">for</span> <span class="n">triple</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="n">corpus</span><span class="p">[:</span><span class="o">-</span><span class="mi">2</span><span class="p">],</span> <span class="n">corpus</span><span class="p">[</span><span class="mi">1</span><span class="p">:</span><span class="o">-</span><span class="mi">1</span><span class="p">],</span> <span class="n">corpus</span><span class="p">[</span><span class="mi">2</span><span class="p">:])]</span>
+<span class="n">trigram_vocab</span> <span class="o">=</span> <span class="n">d2l</span><span class="o">.</span><span class="n">Vocab</span><span class="p">(</span><span class="n">trigram_tokens</span><span class="p">)</span>
+<span class="n">trigram_vocab</span><span class="o">.</span><span class="n">token_freqs</span><span class="p">[:</span><span class="mi">10</span><span class="p">]</span>
+</code></pre></div>
+
+<div class="codehilite"><pre><span></span><code>[((&#39;the&#39;, &#39;time&#39;, &#39;traveller&#39;), 59),
+ ((&#39;the&#39;, &#39;time&#39;, &#39;machine&#39;), 30),
+ ((&#39;the&#39;, &#39;medical&#39;, &#39;man&#39;), 24),
+ ((&#39;it&#39;, &#39;seemed&#39;, &#39;to&#39;), 16),
+ ((&#39;it&#39;, &#39;was&#39;, &#39;a&#39;), 15),
+ ((&#39;here&#39;, &#39;and&#39;, &#39;there&#39;), 15),
+ ((&#39;seemed&#39;, &#39;to&#39;, &#39;me&#39;), 14),
+ ((&#39;i&#39;, &#39;did&#39;, &#39;not&#39;), 14),
+ ((&#39;i&#39;, &#39;saw&#39;, &#39;the&#39;), 13),
+ ((&#39;i&#39;, &#39;began&#39;, &#39;to&#39;), 13)]
+</code></pre></div>
+
+<p>Last, let us <strong>visualize the token frequency</strong> among these three models: unigrams, bigrams, and trigrams.</p>
+<div class="codehilite"><pre><span></span><code><span class="n">bigram_freqs</span> <span class="o">=</span> <span class="p">[</span><span class="n">freq</span> <span class="k">for</span> <span class="n">token</span><span class="p">,</span> <span class="n">freq</span> <span class="ow">in</span> <span class="n">bigram_vocab</span><span class="o">.</span><span class="n">token_freqs</span><span class="p">]</span>
+<span class="n">trigram_freqs</span> <span class="o">=</span> <span class="p">[</span><span class="n">freq</span> <span class="k">for</span> <span class="n">token</span><span class="p">,</span> <span class="n">freq</span> <span class="ow">in</span> <span class="n">trigram_vocab</span><span class="o">.</span><span class="n">token_freqs</span><span class="p">]</span>
+<span class="n">d2l</span><span class="o">.</span><span class="n">plot</span><span class="p">([</span><span class="n">freqs</span><span class="p">,</span> <span class="n">bigram_freqs</span><span class="p">,</span> <span class="n">trigram_freqs</span><span class="p">],</span> <span class="n">xlabel</span><span class="o">=</span><span class="s1">&#39;token: x&#39;</span><span class="p">,</span>
+         <span class="n">ylabel</span><span class="o">=</span><span class="s1">&#39;frequency: n(x)&#39;</span><span class="p">,</span> <span class="n">xscale</span><span class="o">=</span><span class="s1">&#39;log&#39;</span><span class="p">,</span> <span class="n">yscale</span><span class="o">=</span><span class="s1">&#39;log&#39;</span><span class="p">,</span>
+         <span class="n">legend</span><span class="o">=</span><span class="p">[</span><span class="s1">&#39;unigram&#39;</span><span class="p">,</span> <span class="s1">&#39;bigram&#39;</span><span class="p">,</span> <span class="s1">&#39;trigram&#39;</span><span class="p">])</span>
+</code></pre></div>
+
+<p><img alt="svg" src="output_10_0.svg" /></p>
+<p>This figure is quite exciting for a number of reasons. First, beyond unigram words, sequences of words also appear to be following Zipf's law, albeit with a smaller exponent $\alpha$, depending on the sequence length.
+Second, the number of distinct $n$-grams is not that large. This gives us hope that there is quite a lot of structure in language.
+Third, many $n$-grams occur very rarely, which makes Laplace smoothing rather unsuitable for language modeling. Instead, we will use deep learning based models.</p>
+<h2>Reading Long Sequence Data</h2>
+<p>Since sequence data are by their very nature sequential, we need to address
+the issue of processing it..
+When sequences get too long to be processed by models
+all at once,
+we may wish to split such sequences for reading.
+Now let us describe general strategies.
+Before introducing the model,
+let us assume that we will use a neural network to train a language model,
+where the network processes a minibatch of sequences with predefined length, say $n$ time steps, at a time.
+Now the question is how to <strong>read minibatches of features and labels at random.</strong></p>
+<p>To begin with,
+since a text sequence can be arbitrarily long,
+such as the entire <em>The Time Machine</em> book,
+we can partition such a long sequence into subsequences
+with the same number of time steps.
+When training our neural network,
+a minibatch of such subsequences
+will be fed into the model.
+Suppose that the network processes a subsequence
+of $n$ time steps
+at a time. figure 8.3.1 (https://d2l.ai/chapter_recurrent-neural-networks/language-models-and-dataset.html)
+shows all the different ways to obtain subsequences
+from an original text sequence, where $n=5$ and a token at each time step corresponds to a character.
+Note that we have quite some freedom since we could pick an arbitrary offset that indicates the initial position.</p>
+<p>Hence, which one should we pick from figure 8.3.1?
+In fact, all of them are equally good.
+However, if we pick just one offset,
+there is limited coverage of all the possible subsequences
+for training our network.
+Therefore,
+we can start with a random offset to partition a sequence
+to get both <em>coverage</em> and <em>randomness</em>.
+In the following,
+we describe how to accomplish this for both
+<em>random sampling</em> and <em>sequential partitioning</em> strategies.</p>
+<h3>Random Sampling</h3>
+<p><strong>In random sampling, each example is a subsequence arbitrarily captured on the original long sequence.</strong>
+The subsequences from two adjacent random minibatches
+during iteration
+are not necessarily adjacent on the original sequence.
+For language modeling,
+the target is to predict the next token based on what tokens we have seen so far, hence the labels are the original sequence, shifted by one token.</p>
+<p>The following code randomly generates a minibatch from the data each time.
+Here, the argument <code>batch_size</code> specifies the number of subsequence examples in each minibatch
+and <code>num_steps</code> is the predefined number of time steps
+in each subsequence.</p>
+<div class="codehilite"><pre><span></span><code><span class="k">def</span> <span class="nf">seq_data_iter_random</span><span class="p">(</span><span class="n">corpus</span><span class="p">,</span> <span class="n">batch_size</span><span class="p">,</span> <span class="n">num_steps</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Generate a minibatch of subsequences using random sampling.&quot;&quot;&quot;</span>
+    <span class="c1"># Start with a random offset (inclusive of `num_steps - 1`) to partition a</span>
+    <span class="c1"># sequence</span>
+    <span class="n">corpus</span> <span class="o">=</span> <span class="n">corpus</span><span class="p">[</span><span class="n">random</span><span class="o">.</span><span class="n">randint</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">num_steps</span> <span class="o">-</span> <span class="mi">1</span><span class="p">):]</span>
+    <span class="c1"># Subtract 1 since we need to account for labels</span>
+    <span class="n">num_subseqs</span> <span class="o">=</span> <span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">corpus</span><span class="p">)</span> <span class="o">-</span> <span class="mi">1</span><span class="p">)</span> <span class="o">//</span> <span class="n">num_steps</span>
+    <span class="c1"># The starting indices for subsequences of length `num_steps`</span>
+    <span class="n">initial_indices</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="nb">range</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">num_subseqs</span> <span class="o">*</span> <span class="n">num_steps</span><span class="p">,</span> <span class="n">num_steps</span><span class="p">))</span>
+    <span class="c1"># In random sampling, the subsequences from two adjacent random</span>
+    <span class="c1"># minibatches during iteration are not necessarily adjacent on the</span>
+    <span class="c1"># original sequence</span>
+    <span class="n">random</span><span class="o">.</span><span class="n">shuffle</span><span class="p">(</span><span class="n">initial_indices</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">data</span><span class="p">(</span><span class="n">pos</span><span class="p">):</span>
+        <span class="c1"># Return a sequence of length `num_steps` starting from `pos`</span>
+        <span class="k">return</span> <span class="n">corpus</span><span class="p">[</span><span class="n">pos</span><span class="p">:</span><span class="n">pos</span> <span class="o">+</span> <span class="n">num_steps</span><span class="p">]</span>
+
+    <span class="n">num_batches</span> <span class="o">=</span> <span class="n">num_subseqs</span> <span class="o">//</span> <span class="n">batch_size</span>
+    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">batch_size</span> <span class="o">*</span> <span class="n">num_batches</span><span class="p">,</span> <span class="n">batch_size</span><span class="p">):</span>
+        <span class="c1"># Here, `initial_indices` contains randomized starting indices for</span>
+        <span class="c1"># subsequences</span>
+        <span class="n">initial_indices_per_batch</span> <span class="o">=</span> <span class="n">initial_indices</span><span class="p">[</span><span class="n">i</span><span class="p">:</span><span class="n">i</span> <span class="o">+</span> <span class="n">batch_size</span><span class="p">]</span>
+        <span class="n">X</span> <span class="o">=</span> <span class="p">[</span><span class="n">data</span><span class="p">(</span><span class="n">j</span><span class="p">)</span> <span class="k">for</span> <span class="n">j</span> <span class="ow">in</span> <span class="n">initial_indices_per_batch</span><span class="p">]</span>
+        <span class="n">Y</span> <span class="o">=</span> <span class="p">[</span><span class="n">data</span><span class="p">(</span><span class="n">j</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span> <span class="k">for</span> <span class="n">j</span> <span class="ow">in</span> <span class="n">initial_indices_per_batch</span><span class="p">]</span>
+        <span class="k">yield</span> <span class="n">torch</span><span class="o">.</span><span class="n">tensor</span><span class="p">(</span><span class="n">X</span><span class="p">),</span> <span class="n">torch</span><span class="o">.</span><span class="n">tensor</span><span class="p">(</span><span class="n">Y</span><span class="p">)</span>
+</code></pre></div>
+
+<p>Let us <strong>manually generate a sequence from 0 to 34.</strong>
+We assume that
+the batch size and numbers of time steps are 2 and 5,
+respectively.
+This means that we can generate $\lfloor (35 - 1) / 5 \rfloor= 6$ feature-label subsequence pairs. With a minibatch size of 2, we only get 3 minibatches.</p>
+<div class="codehilite"><pre><span></span><code><span class="n">my_seq</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="nb">range</span><span class="p">(</span><span class="mi">35</span><span class="p">))</span>
+<span class="k">for</span> <span class="n">X</span><span class="p">,</span> <span class="n">Y</span> <span class="ow">in</span> <span class="n">seq_data_iter_random</span><span class="p">(</span><span class="n">my_seq</span><span class="p">,</span> <span class="n">batch_size</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">num_steps</span><span class="o">=</span><span class="mi">5</span><span class="p">):</span>
+    <span class="nb">print</span><span class="p">(</span><span class="s1">&#39;X: &#39;</span><span class="p">,</span> <span class="n">X</span><span class="p">,</span> <span class="s1">&#39;</span><span class="se">\n</span><span class="s1">Y:&#39;</span><span class="p">,</span> <span class="n">Y</span><span class="p">)</span>
+</code></pre></div>
+
+<div class="codehilite"><pre><span></span><code><span class="n">X</span><span class="o">:</span><span class="w">  </span><span class="n">tensor</span><span class="o">([[</span><span class="mi">24</span><span class="o">,</span><span class="w"> </span><span class="mi">25</span><span class="o">,</span><span class="w"> </span><span class="mi">26</span><span class="o">,</span><span class="w"> </span><span class="mi">27</span><span class="o">,</span><span class="w"> </span><span class="mi">28</span><span class="o">],</span>
+<span class="w">        </span><span class="o">[</span><span class="mi">29</span><span class="o">,</span><span class="w"> </span><span class="mi">30</span><span class="o">,</span><span class="w"> </span><span class="mi">31</span><span class="o">,</span><span class="w"> </span><span class="mi">32</span><span class="o">,</span><span class="w"> </span><span class="mi">33</span><span class="o">]])</span><span class="w"> </span>
+<span class="n">Y</span><span class="o">:</span><span class="w"> </span><span class="n">tensor</span><span class="o">([[</span><span class="mi">25</span><span class="o">,</span><span class="w"> </span><span class="mi">26</span><span class="o">,</span><span class="w"> </span><span class="mi">27</span><span class="o">,</span><span class="w"> </span><span class="mi">28</span><span class="o">,</span><span class="w"> </span><span class="mi">29</span><span class="o">],</span>
+<span class="w">        </span><span class="o">[</span><span class="mi">30</span><span class="o">,</span><span class="w"> </span><span class="mi">31</span><span class="o">,</span><span class="w"> </span><span class="mi">32</span><span class="o">,</span><span class="w"> </span><span class="mi">33</span><span class="o">,</span><span class="w"> </span><span class="mi">34</span><span class="o">]])</span>
+<span class="n">X</span><span class="o">:</span><span class="w">  </span><span class="n">tensor</span><span class="o">([[</span><span class="w"> </span><span class="mi">4</span><span class="o">,</span><span class="w">  </span><span class="mi">5</span><span class="o">,</span><span class="w">  </span><span class="mi">6</span><span class="o">,</span><span class="w">  </span><span class="mi">7</span><span class="o">,</span><span class="w">  </span><span class="mi">8</span><span class="o">],</span>
+<span class="w">        </span><span class="o">[</span><span class="w"> </span><span class="mi">9</span><span class="o">,</span><span class="w"> </span><span class="mi">10</span><span class="o">,</span><span class="w"> </span><span class="mi">11</span><span class="o">,</span><span class="w"> </span><span class="mi">12</span><span class="o">,</span><span class="w"> </span><span class="mi">13</span><span class="o">]])</span><span class="w"> </span>
+<span class="n">Y</span><span class="o">:</span><span class="w"> </span><span class="n">tensor</span><span class="o">([[</span><span class="w"> </span><span class="mi">5</span><span class="o">,</span><span class="w">  </span><span class="mi">6</span><span class="o">,</span><span class="w">  </span><span class="mi">7</span><span class="o">,</span><span class="w">  </span><span class="mi">8</span><span class="o">,</span><span class="w">  </span><span class="mi">9</span><span class="o">],</span>
+<span class="w">        </span><span class="o">[</span><span class="mi">10</span><span class="o">,</span><span class="w"> </span><span class="mi">11</span><span class="o">,</span><span class="w"> </span><span class="mi">12</span><span class="o">,</span><span class="w"> </span><span class="mi">13</span><span class="o">,</span><span class="w"> </span><span class="mi">14</span><span class="o">]])</span>
+<span class="n">X</span><span class="o">:</span><span class="w">  </span><span class="n">tensor</span><span class="o">([[</span><span class="mi">19</span><span class="o">,</span><span class="w"> </span><span class="mi">20</span><span class="o">,</span><span class="w"> </span><span class="mi">21</span><span class="o">,</span><span class="w"> </span><span class="mi">22</span><span class="o">,</span><span class="w"> </span><span class="mi">23</span><span class="o">],</span>
+<span class="w">        </span><span class="o">[</span><span class="mi">14</span><span class="o">,</span><span class="w"> </span><span class="mi">15</span><span class="o">,</span><span class="w"> </span><span class="mi">16</span><span class="o">,</span><span class="w"> </span><span class="mi">17</span><span class="o">,</span><span class="w"> </span><span class="mi">18</span><span class="o">]])</span><span class="w"> </span>
+<span class="n">Y</span><span class="o">:</span><span class="w"> </span><span class="n">tensor</span><span class="o">([[</span><span class="mi">20</span><span class="o">,</span><span class="w"> </span><span class="mi">21</span><span class="o">,</span><span class="w"> </span><span class="mi">22</span><span class="o">,</span><span class="w"> </span><span class="mi">23</span><span class="o">,</span><span class="w"> </span><span class="mi">24</span><span class="o">],</span>
+<span class="w">        </span><span class="o">[</span><span class="mi">15</span><span class="o">,</span><span class="w"> </span><span class="mi">16</span><span class="o">,</span><span class="w"> </span><span class="mi">17</span><span class="o">,</span><span class="w"> </span><span class="mi">18</span><span class="o">,</span><span class="w"> </span><span class="mi">19</span><span class="o">]])</span>
+</code></pre></div>
+
+<h3>Sequential Partitioning</h3>
+<p>In addition to random sampling of the original sequence, <strong>we can also ensure that 
+the subsequences from two adjacent minibatches
+during iteration
+are adjacent on the original sequence.</strong>
+This strategy preserves the order of split subsequences when iterating over minibatches, hence is called sequential partitioning.</p>
+<div class="codehilite"><pre><span></span><code><span class="k">def</span> <span class="nf">seq_data_iter_sequential</span><span class="p">(</span><span class="n">corpus</span><span class="p">,</span> <span class="n">batch_size</span><span class="p">,</span> <span class="n">num_steps</span><span class="p">):</span> 
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Generate a minibatch of subsequences using sequential partitioning.&quot;&quot;&quot;</span>
+    <span class="c1"># Start with a random offset to partition a sequence</span>
+    <span class="n">offset</span> <span class="o">=</span> <span class="n">random</span><span class="o">.</span><span class="n">randint</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">num_steps</span><span class="p">)</span>
+    <span class="n">num_tokens</span> <span class="o">=</span> <span class="p">((</span><span class="nb">len</span><span class="p">(</span><span class="n">corpus</span><span class="p">)</span> <span class="o">-</span> <span class="n">offset</span> <span class="o">-</span> <span class="mi">1</span><span class="p">)</span> <span class="o">//</span> <span class="n">batch_size</span><span class="p">)</span> <span class="o">*</span> <span class="n">batch_size</span>
+    <span class="n">Xs</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">tensor</span><span class="p">(</span><span class="n">corpus</span><span class="p">[</span><span class="n">offset</span><span class="p">:</span><span class="n">offset</span> <span class="o">+</span> <span class="n">num_tokens</span><span class="p">])</span>
+    <span class="n">Ys</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">tensor</span><span class="p">(</span><span class="n">corpus</span><span class="p">[</span><span class="n">offset</span> <span class="o">+</span> <span class="mi">1</span><span class="p">:</span><span class="n">offset</span> <span class="o">+</span> <span class="mi">1</span> <span class="o">+</span> <span class="n">num_tokens</span><span class="p">])</span>
+    <span class="n">Xs</span><span class="p">,</span> <span class="n">Ys</span> <span class="o">=</span> <span class="n">Xs</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="n">batch_size</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">),</span> <span class="n">Ys</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="n">batch_size</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">)</span>
+    <span class="n">num_batches</span> <span class="o">=</span> <span class="n">Xs</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">//</span> <span class="n">num_steps</span>
+    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">num_steps</span> <span class="o">*</span> <span class="n">num_batches</span><span class="p">,</span> <span class="n">num_steps</span><span class="p">):</span>
+        <span class="n">X</span> <span class="o">=</span> <span class="n">Xs</span><span class="p">[:,</span> <span class="n">i</span><span class="p">:</span><span class="n">i</span> <span class="o">+</span> <span class="n">num_steps</span><span class="p">]</span>
+        <span class="n">Y</span> <span class="o">=</span> <span class="n">Ys</span><span class="p">[:,</span> <span class="n">i</span><span class="p">:</span><span class="n">i</span> <span class="o">+</span> <span class="n">num_steps</span><span class="p">]</span>
+        <span class="k">yield</span> <span class="n">X</span><span class="p">,</span> <span class="n">Y</span>
+</code></pre></div>
+
+<p>Using the same settings,
+let us <strong>print features <code>X</code> and labels <code>Y</code> for each minibatch</strong> of subsequences read by sequential partitioning.
+Note that
+the subsequences from two adjacent minibatches
+during iteration
+are indeed adjacent on the original sequence.</p>
+<div class="codehilite"><pre><span></span><code><span class="k">for</span> <span class="n">X</span><span class="p">,</span> <span class="n">Y</span> <span class="ow">in</span> <span class="n">seq_data_iter_sequential</span><span class="p">(</span><span class="n">my_seq</span><span class="p">,</span> <span class="n">batch_size</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">num_steps</span><span class="o">=</span><span class="mi">5</span><span class="p">):</span>
+    <span class="nb">print</span><span class="p">(</span><span class="s1">&#39;X: &#39;</span><span class="p">,</span> <span class="n">X</span><span class="p">,</span> <span class="s1">&#39;</span><span class="se">\n</span><span class="s1">Y:&#39;</span><span class="p">,</span> <span class="n">Y</span><span class="p">)</span>
+</code></pre></div>
+
+<div class="codehilite"><pre><span></span><code><span class="n">X</span><span class="o">:</span><span class="w">  </span><span class="n">tensor</span><span class="o">([[</span><span class="w"> </span><span class="mi">1</span><span class="o">,</span><span class="w">  </span><span class="mi">2</span><span class="o">,</span><span class="w">  </span><span class="mi">3</span><span class="o">,</span><span class="w">  </span><span class="mi">4</span><span class="o">,</span><span class="w">  </span><span class="mi">5</span><span class="o">],</span>
+<span class="w">        </span><span class="o">[</span><span class="mi">17</span><span class="o">,</span><span class="w"> </span><span class="mi">18</span><span class="o">,</span><span class="w"> </span><span class="mi">19</span><span class="o">,</span><span class="w"> </span><span class="mi">20</span><span class="o">,</span><span class="w"> </span><span class="mi">21</span><span class="o">]])</span><span class="w"> </span>
+<span class="n">Y</span><span class="o">:</span><span class="w"> </span><span class="n">tensor</span><span class="o">([[</span><span class="w"> </span><span class="mi">2</span><span class="o">,</span><span class="w">  </span><span class="mi">3</span><span class="o">,</span><span class="w">  </span><span class="mi">4</span><span class="o">,</span><span class="w">  </span><span class="mi">5</span><span class="o">,</span><span class="w">  </span><span class="mi">6</span><span class="o">],</span>
+<span class="w">        </span><span class="o">[</span><span class="mi">18</span><span class="o">,</span><span class="w"> </span><span class="mi">19</span><span class="o">,</span><span class="w"> </span><span class="mi">20</span><span class="o">,</span><span class="w"> </span><span class="mi">21</span><span class="o">,</span><span class="w"> </span><span class="mi">22</span><span class="o">]])</span>
+<span class="n">X</span><span class="o">:</span><span class="w">  </span><span class="n">tensor</span><span class="o">([[</span><span class="w"> </span><span class="mi">6</span><span class="o">,</span><span class="w">  </span><span class="mi">7</span><span class="o">,</span><span class="w">  </span><span class="mi">8</span><span class="o">,</span><span class="w">  </span><span class="mi">9</span><span class="o">,</span><span class="w"> </span><span class="mi">10</span><span class="o">],</span>
+<span class="w">        </span><span class="o">[</span><span class="mi">22</span><span class="o">,</span><span class="w"> </span><span class="mi">23</span><span class="o">,</span><span class="w"> </span><span class="mi">24</span><span class="o">,</span><span class="w"> </span><span class="mi">25</span><span class="o">,</span><span class="w"> </span><span class="mi">26</span><span class="o">]])</span><span class="w"> </span>
+<span class="n">Y</span><span class="o">:</span><span class="w"> </span><span class="n">tensor</span><span class="o">([[</span><span class="w"> </span><span class="mi">7</span><span class="o">,</span><span class="w">  </span><span class="mi">8</span><span class="o">,</span><span class="w">  </span><span class="mi">9</span><span class="o">,</span><span class="w"> </span><span class="mi">10</span><span class="o">,</span><span class="w"> </span><span class="mi">11</span><span class="o">],</span>
+<span class="w">        </span><span class="o">[</span><span class="mi">23</span><span class="o">,</span><span class="w"> </span><span class="mi">24</span><span class="o">,</span><span class="w"> </span><span class="mi">25</span><span class="o">,</span><span class="w"> </span><span class="mi">26</span><span class="o">,</span><span class="w"> </span><span class="mi">27</span><span class="o">]])</span>
+<span class="n">X</span><span class="o">:</span><span class="w">  </span><span class="n">tensor</span><span class="o">([[</span><span class="mi">11</span><span class="o">,</span><span class="w"> </span><span class="mi">12</span><span class="o">,</span><span class="w"> </span><span class="mi">13</span><span class="o">,</span><span class="w"> </span><span class="mi">14</span><span class="o">,</span><span class="w"> </span><span class="mi">15</span><span class="o">],</span>
+<span class="w">        </span><span class="o">[</span><span class="mi">27</span><span class="o">,</span><span class="w"> </span><span class="mi">28</span><span class="o">,</span><span class="w"> </span><span class="mi">29</span><span class="o">,</span><span class="w"> </span><span class="mi">30</span><span class="o">,</span><span class="w"> </span><span class="mi">31</span><span class="o">]])</span><span class="w"> </span>
+<span class="n">Y</span><span class="o">:</span><span class="w"> </span><span class="n">tensor</span><span class="o">([[</span><span class="mi">12</span><span class="o">,</span><span class="w"> </span><span class="mi">13</span><span class="o">,</span><span class="w"> </span><span class="mi">14</span><span class="o">,</span><span class="w"> </span><span class="mi">15</span><span class="o">,</span><span class="w"> </span><span class="mi">16</span><span class="o">],</span>
+<span class="w">        </span><span class="o">[</span><span class="mi">28</span><span class="o">,</span><span class="w"> </span><span class="mi">29</span><span class="o">,</span><span class="w"> </span><span class="mi">30</span><span class="o">,</span><span class="w"> </span><span class="mi">31</span><span class="o">,</span><span class="w"> </span><span class="mi">32</span><span class="o">]])</span>
+</code></pre></div>
+
+<p>Now we wrap the above two sampling functions to a class so that we can use it as a data iterator later.</p>
+<div class="codehilite"><pre><span></span><code><span class="k">class</span> <span class="nc">SeqDataLoader</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;An iterator to load sequence data.&quot;&quot;&quot;</span>
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">batch_size</span><span class="p">,</span> <span class="n">num_steps</span><span class="p">,</span> <span class="n">use_random_iter</span><span class="p">,</span> <span class="n">max_tokens</span><span class="p">):</span>
+        <span class="k">if</span> <span class="n">use_random_iter</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">data_iter_fn</span> <span class="o">=</span> <span class="n">d2l</span><span class="o">.</span><span class="n">seq_data_iter_random</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">data_iter_fn</span> <span class="o">=</span> <span class="n">d2l</span><span class="o">.</span><span class="n">seq_data_iter_sequential</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">corpus</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">vocab</span> <span class="o">=</span> <span class="n">d2l</span><span class="o">.</span><span class="n">load_corpus_time_machine</span><span class="p">(</span><span class="n">max_tokens</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">batch_size</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">num_steps</span> <span class="o">=</span> <span class="n">batch_size</span><span class="p">,</span> <span class="n">num_steps</span>
+
+    <span class="k">def</span> <span class="fm">__iter__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">data_iter_fn</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">corpus</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">batch_size</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">num_steps</span><span class="p">)</span>
+</code></pre></div>
+
+<p><strong>Last, we define a function <code>load_data_time_machine</code> that returns both the data iterator and the vocabulary</strong>, so we can use it similarly as other other functions with the <code>load_data</code> prefix, such as <code>d2l.load_data_fashion_mnist</code>.</p>
+<div class="codehilite"><pre><span></span><code><span class="k">def</span> <span class="nf">load_data_time_machine</span><span class="p">(</span><span class="n">batch_size</span><span class="p">,</span> <span class="n">num_steps</span><span class="p">,</span> 
+                           <span class="n">use_random_iter</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">max_tokens</span><span class="o">=</span><span class="mi">10000</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Return the iterator and the vocabulary of the time machine dataset.&quot;&quot;&quot;</span>
+    <span class="n">data_iter</span> <span class="o">=</span> <span class="n">SeqDataLoader</span><span class="p">(</span><span class="n">batch_size</span><span class="p">,</span> <span class="n">num_steps</span><span class="p">,</span> <span class="n">use_random_iter</span><span class="p">,</span>
+                              <span class="n">max_tokens</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">data_iter</span><span class="p">,</span> <span class="n">data_iter</span><span class="o">.</span><span class="n">vocab</span>
+</code></pre></div>
+
+<h2>Summary</h2>
+<ul>
+<li>Language models are key to natural language processing.</li>
+<li>$n$-grams provide a convenient model for dealing with long sequences by truncating the dependence.</li>
+<li>Long sequences suffer from the problem that they occur very rarely or never.</li>
+<li>Zipf's law governs the word distribution for not only unigrams but also the other $n$-grams.</li>
+<li>There is a lot of structure but not enough frequency to deal with infrequent word combinations efficiently via Laplace smoothing.</li>
+<li>The main choices for reading long sequences are random sampling and sequential partitioning. The latter can ensure that the subsequences from two adjacent minibatches during iteration are adjacent on the original sequence.</li>
+</ul>
+<h2>Exercises</h2>
+<ol>
+<li>If we want a sequence example to be a complete sentence, what kind of problem does this introduce in minibatch sampling? How can we fix the problem?</li>
+</ol>
+<p><a href="https://discuss.d2l.ai/t/118">Discussions</a></p>
+</body>
+</html>

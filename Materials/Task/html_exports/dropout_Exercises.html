@@ -1,0 +1,415 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8"/>
+  <title>dropout_Exercises.ipynb</title>
+</head>
+<body>
+<h1>Dropout</h1>
+<p>We introduced the classical approach
+to regularizing statistical models
+by penalizing the $L_2$ norm of the weights.
+In probabilistic terms, we could justify this technique
+by arguing that we have assumed a prior belief
+that weights take values from
+a Gaussian distribution with mean zero.
+More intuitively, we might argue
+that we encouraged the model to spread out its weights
+among many features rather than depending too much
+on a small number of potentially spurious associations.</p>
+<h2>Overfitting Revisited</h2>
+<p>Faced with more features than examples,
+linear models tend to overfit.
+But given more examples than features,
+we can generally count on linear models not to overfit.
+Unfortunately, the reliability with which
+linear models generalize comes at a cost.
+Naively applied, linear models do not take
+into account interactions among features.
+For every feature, a linear model must assign
+either a positive or a negative weight, ignoring context.</p>
+<p>In traditional texts, this fundamental tension
+between generalizability and flexibility
+is described as the <em>bias-variance tradeoff</em>.
+Linear models have high bias: they can only represent a small class of functions.
+However, these models have low variance: they give similar results
+across different random samples of the data.</p>
+<p>Deep neural networks inhabit the opposite
+end of the bias-variance spectrum.
+Unlike linear models, neural networks
+are not confined to looking at each feature individually.
+They can learn interactions among groups of features.
+For example, they might infer that
+“Nigeria” and “Western Union” appearing
+together in an email indicates spam
+but that separately they do not.</p>
+<p>Even when we have far more examples than features,
+deep neural networks are capable of overfitting.
+In 2017, a group of researchers demonstrated
+the extreme flexibility of neural networks
+by training deep nets on randomly-labeled images.
+Despite the absence of any true pattern
+linking the inputs to the outputs,
+they found that the neural network optimized by stochastic gradient descent
+could label every image in the training set perfectly.
+Consider what this means.
+If the labels are assigned uniformly
+at random and there are 10 classes,
+then no classifier can do better
+than 10% accuracy on holdout data.
+The generalization gap here is a whopping 90%.
+If our models are so expressive that they
+can overfit this badly, then when should
+we expect them not to overfit?</p>
+<p>The mathematical foundations for
+the puzzling generalization properties
+of deep networks remain open research questions,
+and we encourage the theoretically-oriented
+reader to dig deeper into the topic.
+For now, we turn to the investigation of
+practical tools that tend to
+empirically improve the generalization of deep nets.</p>
+<h2>Robustness through Perturbations</h2>
+<p>Let us think briefly about what we
+expect from a good predictive model.
+We want it to peform well on unseen data.
+Classical generalization theory
+suggests that to close the gap between
+train and test performance,
+we should aim for a simple model.
+Simplicity can come in the form
+of a small number of dimensions.
+We explored this when discussing the
+monomial basis functions of linear models.
+Additionally, as we saw when discussing weight decay
+($L_2$ regularization),
+the (inverse) norm of the parameters also
+represents a useful measure of simplicity.
+Another useful notion of simplicity is smoothness,
+i.e., that the function should not be sensitive
+to small changes to its inputs.
+For instance, when we classify images,
+we would expect that adding some random noise
+to the pixels should be mostly harmless.</p>
+<p>In 1995, Christopher Bishop formalized
+this idea when he proved that training with input noise
+is equivalent to Tikhonov regularization :cite:<code>Bishop.1995</code>.
+This work drew a clear mathematical connection
+between the requirement that a function be smooth (and thus simple),
+and the requirement that it be resilient
+to perturbations in the input.</p>
+<p>Then, in 2014, Srivastava et al. :cite:<code>Srivastava.Hinton.Krizhevsky.ea.2014</code>
+developed a clever idea for how to apply Bishop's idea
+to the internal layers of a network, too.
+Namely, they proposed to inject noise
+into each layer of the network
+before calculating the subsequent layer during training.
+They realized that when training
+a deep network with many layers,
+injecting noise enforces smoothness just on the input-output mapping.</p>
+<p>Their idea, called <em>dropout</em>, involves
+injecting noise while computing
+each internal layer during forward propagation,
+and it has become a standard technique
+for training neural networks.
+The method is called <em>dropout</em> because we literally
+<em>drop out</em> some neurons during training.
+Throughout training, on each iteration,
+standard dropout consists of zeroing out
+some fraction of the nodes in each layer
+before calculating the subsequent layer.</p>
+<p>To be clear, we are imposing
+our own narrative with the link to Bishop.
+The original paper on dropout
+offers intuition through a surprising
+analogy to sexual reproduction.
+The authors argue that neural network overfitting
+is characterized by a state in which
+each layer relies on a specifc
+pattern of activations in the previous layer,
+calling this condition <em>co-adaptation</em>.
+Dropout, they claim, breaks up co-adaptation
+just as sexual reproduction is argued to
+break up co-adapted genes.</p>
+<p>The key challenge then is how to inject this noise.
+One idea is to inject the noise in an <em>unbiased</em> manner
+so that the expected value of each layer---while fixing
+the others---equals to the value it would have taken absent noise.</p>
+<p>In Bishop's work, he added Gaussian noise
+to the inputs to a linear model.
+At each training iteration, he added noise
+sampled from a distribution with mean zero
+$\epsilon \sim \mathcal{N}(0,\sigma^2)$ to the input $\mathbf{x}$,
+yielding a perturbed point $\mathbf{x}' = \mathbf{x} + \epsilon$.
+In expectation, $E[\mathbf{x}'] = \mathbf{x}$.</p>
+<p>In standard dropout regularization,
+one debiases each layer by normalizing
+by the fraction of nodes that were retained (not dropped out).
+In other words,
+with <em>dropout probability</em> $p$,
+each intermediate activation $h$ is replaced by
+a random variable $h'$ as follows:</p>
+<p>$$
+\begin{aligned}
+h' =
+\begin{cases}
+    0 &amp; \text{ with probability } p \
+    \frac{h}{1-p} &amp; \text{ otherwise}
+\end{cases}
+\end{aligned}
+$$</p>
+<p>By design, the expectation remains unchanged, i.e., $E[h'] = h$.</p>
+<h2>Dropout in Practice</h2>
+<p>Recall the MLP with a hidden layer and 5 hidden units.
+When we apply dropout to a hidden layer,
+zeroing out each hidden unit with probability $p$,
+the result can be viewed as a network
+containing only a subset of the original neurons.
+In figure 4.6.1, $h_2$ and $h_5$ are removed.
+Consequently, the calculation of the outputs
+no longer depends on $h_2$ or $h_5$
+and their respective gradient also vanishes
+when performing backpropagation.
+In this way, the calculation of the output layer
+cannot be overly dependent on any
+one element of $h_1, \ldots, h_5$.</p>
+<p>Typically, we disable dropout at test time.
+Given a trained model and a new example,
+we do not drop out any nodes
+and thus do not need to normalize.
+However, there are some exceptions:
+some researchers use dropout at test time as a heuristic
+for estimating the <em>uncertainty</em> of neural network predictions:
+if the predictions agree across many different dropout masks,
+then we might say that the network is more confident.</p>
+<h2>Implementation from Scratch</h2>
+<p>To implement the dropout function for a single layer,
+we must draw as many samples
+from a Bernoulli (binary) random variable
+as our layer has dimensions,
+where the random variable takes value $1$ (keep)
+with probability $1-p$ and $0$ (drop) with probability $p$.
+One easy way to implement this is to first draw samples
+from the uniform distribution $U[0, 1]$.
+Then we can keep those nodes for which the corresponding
+sample is greater than $p$, dropping the rest.</p>
+<p>In the following code, we <strong>implement a <code>dropout_layer</code> function
+that drops out the elements in the tensor input <code>X</code>
+with probability <code>dropout</code></strong>,
+rescaling the remainder as described above:
+dividing the survivors by <code>1.0-dropout</code>.</p>
+<div class="codehilite"><pre><span></span><code><span class="err">!</span> <span class="n">pip</span> <span class="n">install</span> <span class="n">d2l</span>
+<span class="kn">import</span> <span class="nn">torch</span>
+<span class="kn">from</span> <span class="nn">torch</span> <span class="kn">import</span> <span class="n">nn</span>
+<span class="kn">from</span> <span class="nn">d2l</span> <span class="kn">import</span> <span class="n">torch</span> <span class="k">as</span> <span class="n">d2l</span>
+
+<span class="k">def</span> <span class="nf">dropout_layer</span><span class="p">(</span><span class="n">X</span><span class="p">,</span> <span class="n">dropout</span><span class="p">):</span>
+    <span class="k">assert</span> <span class="mi">0</span> <span class="o">&lt;=</span> <span class="n">dropout</span> <span class="o">&lt;=</span> <span class="mi">1</span>
+    <span class="c1"># In this case, all elements are dropped out</span>
+    <span class="k">if</span> <span class="n">dropout</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">torch</span><span class="o">.</span><span class="n">zeros_like</span><span class="p">(</span><span class="n">X</span><span class="p">)</span>
+    <span class="c1"># In this case, all elements are kept</span>
+    <span class="k">if</span> <span class="n">dropout</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">X</span>
+    <span class="n">mask</span> <span class="o">=</span> <span class="p">(</span><span class="n">torch</span><span class="o">.</span><span class="n">rand</span><span class="p">(</span><span class="n">X</span><span class="o">.</span><span class="n">shape</span><span class="p">)</span> <span class="o">&gt;</span> <span class="n">dropout</span><span class="p">)</span><span class="o">.</span><span class="n">float</span><span class="p">()</span>
+    <span class="k">return</span> <span class="n">mask</span> <span class="o">*</span> <span class="n">X</span> <span class="o">/</span> <span class="p">(</span><span class="mf">1.0</span> <span class="o">-</span> <span class="n">dropout</span><span class="p">)</span>
+</code></pre></div>
+
+<div class="codehilite"><pre><span></span><code><span class="n">Collecting</span><span class="w"> </span><span class="n">d2l</span>
+<span class="w">  </span><span class="n">Downloading</span><span class="w"> </span><span class="n">d2l</span><span class="o">-</span><span class="mf">0.17</span><span class="o">.</span><span class="mi">0</span><span class="o">-</span><span class="n">py3</span><span class="o">-</span><span class="n">none</span><span class="o">-</span><span class="n">any</span><span class="o">.</span><span class="n">whl</span><span class="w"> </span><span class="p">(</span><span class="mi">83</span><span class="w"> </span><span class="n">kB</span><span class="p">)</span>
+<span class="err"></span><span class="p">[</span><span class="err">?</span><span class="mi">25</span><span class="n">l</span>
+</code></pre></div>
+
+<p>[K     |████                            | 10 kB 25.9 MB/s eta 0:00:01
+[K     |███████▉                        | 20 kB 31.9 MB/s eta 0:00:01
+[K     |███████████▉                    | 30 kB 17.0 MB/s eta 0:00:01
+[K     |███████████████▊                | 40 kB 12.1 MB/s eta 0:00:01
+[K     |███████████████████▊            | 51 kB 5.4 MB/s eta 0:00:01
+[K     |███████████████████████▋        | 61 kB 5.9 MB/s eta 0:00:01
+[K     |███████████████████████████▋    | 71 kB 5.3 MB/s eta 0:00:01
+[K     |███████████████████████████████▌| 81 kB 5.9 MB/s eta 0:00:01
+[K     |████████████████████████████████| 83 kB 1.3 MB/s 
+    [?25hRequirement already satisfied: numpy in /usr/local/lib/python3.7/dist-packages (from d2l) (1.19.5)
+    Requirement already satisfied: jupyter in /usr/local/lib/python3.7/dist-packages (from d2l) (1.0.0)
+    Requirement already satisfied: pandas in /usr/local/lib/python3.7/dist-packages (from d2l) (1.1.5)
+    Requirement already satisfied: matplotlib in /usr/local/lib/python3.7/dist-packages (from d2l) (3.2.2)
+    Requirement already satisfied: requests in /usr/local/lib/python3.7/dist-packages (from d2l) (2.23.0)
+    Requirement already satisfied: nbconvert in /usr/local/lib/python3.7/dist-packages (from jupyter-&gt;d2l) (5.6.1)
+    Requirement already satisfied: jupyter-console in /usr/local/lib/python3.7/dist-packages (from jupyter-&gt;d2l) (5.2.0)
+    Requirement already satisfied: notebook in /usr/local/lib/python3.7/dist-packages (from jupyter-&gt;d2l) (5.3.1)
+    Requirement already satisfied: qtconsole in /usr/local/lib/python3.7/dist-packages (from jupyter-&gt;d2l) (5.1.1)
+    Requirement already satisfied: ipywidgets in /usr/local/lib/python3.7/dist-packages (from jupyter-&gt;d2l) (7.6.5)
+    Requirement already satisfied: ipykernel in /usr/local/lib/python3.7/dist-packages (from jupyter-&gt;d2l) (4.10.1)
+    Requirement already satisfied: jupyter-client in /usr/local/lib/python3.7/dist-packages (from ipykernel-&gt;jupyter-&gt;d2l) (5.3.5)
+    Requirement already satisfied: traitlets&gt;=4.1.0 in /usr/local/lib/python3.7/dist-packages (from ipykernel-&gt;jupyter-&gt;d2l) (5.1.0)
+    Requirement already satisfied: ipython&gt;=4.0.0 in /usr/local/lib/python3.7/dist-packages (from ipykernel-&gt;jupyter-&gt;d2l) (5.5.0)
+    Requirement already satisfied: tornado&gt;=4.0 in /usr/local/lib/python3.7/dist-packages (from ipykernel-&gt;jupyter-&gt;d2l) (5.1.1)
+    Requirement already satisfied: decorator in /usr/local/lib/python3.7/dist-packages (from ipython&gt;=4.0.0-&gt;ipykernel-&gt;jupyter-&gt;d2l) (4.4.2)
+    Requirement already satisfied: setuptools&gt;=18.5 in /usr/local/lib/python3.7/dist-packages (from ipython&gt;=4.0.0-&gt;ipykernel-&gt;jupyter-&gt;d2l) (57.4.0)
+    Requirement already satisfied: pexpect in /usr/local/lib/python3.7/dist-packages (from ipython&gt;=4.0.0-&gt;ipykernel-&gt;jupyter-&gt;d2l) (4.8.0)
+    Requirement already satisfied: pygments in /usr/local/lib/python3.7/dist-packages (from ipython&gt;=4.0.0-&gt;ipykernel-&gt;jupyter-&gt;d2l) (2.6.1)
+    Requirement already satisfied: prompt-toolkit&lt;2.0.0,&gt;=1.0.4 in /usr/local/lib/python3.7/dist-packages (from ipython&gt;=4.0.0-&gt;ipykernel-&gt;jupyter-&gt;d2l) (1.0.18)
+    Requirement already satisfied: pickleshare in /usr/local/lib/python3.7/dist-packages (from ipython&gt;=4.0.0-&gt;ipykernel-&gt;jupyter-&gt;d2l) (0.7.5)
+    Requirement already satisfied: simplegeneric&gt;0.8 in /usr/local/lib/python3.7/dist-packages (from ipython&gt;=4.0.0-&gt;ipykernel-&gt;jupyter-&gt;d2l) (0.8.1)
+    Requirement already satisfied: wcwidth in /usr/local/lib/python3.7/dist-packages (from prompt-toolkit&lt;2.0.0,&gt;=1.0.4-&gt;ipython&gt;=4.0.0-&gt;ipykernel-&gt;jupyter-&gt;d2l) (0.2.5)
+    Requirement already satisfied: six&gt;=1.9.0 in /usr/local/lib/python3.7/dist-packages (from prompt-toolkit&lt;2.0.0,&gt;=1.0.4-&gt;ipython&gt;=4.0.0-&gt;ipykernel-&gt;jupyter-&gt;d2l) (1.15.0)
+    Requirement already satisfied: ipython-genutils~=0.2.0 in /usr/local/lib/python3.7/dist-packages (from ipywidgets-&gt;jupyter-&gt;d2l) (0.2.0)
+    Requirement already satisfied: widgetsnbextension~=3.5.0 in /usr/local/lib/python3.7/dist-packages (from ipywidgets-&gt;jupyter-&gt;d2l) (3.5.1)
+    Requirement already satisfied: nbformat&gt;=4.2.0 in /usr/local/lib/python3.7/dist-packages (from ipywidgets-&gt;jupyter-&gt;d2l) (5.1.3)
+    Requirement already satisfied: jupyterlab-widgets&gt;=1.0.0 in /usr/local/lib/python3.7/dist-packages (from ipywidgets-&gt;jupyter-&gt;d2l) (1.0.2)
+    Requirement already satisfied: jupyter-core in /usr/local/lib/python3.7/dist-packages (from nbformat&gt;=4.2.0-&gt;ipywidgets-&gt;jupyter-&gt;d2l) (4.8.1)
+    Requirement already satisfied: jsonschema!=2.5.0,&gt;=2.4 in /usr/local/lib/python3.7/dist-packages (from nbformat&gt;=4.2.0-&gt;ipywidgets-&gt;jupyter-&gt;d2l) (2.6.0)
+    Requirement already satisfied: Send2Trash in /usr/local/lib/python3.7/dist-packages (from notebook-&gt;jupyter-&gt;d2l) (1.8.0)
+    Requirement already satisfied: jinja2 in /usr/local/lib/python3.7/dist-packages (from notebook-&gt;jupyter-&gt;d2l) (2.11.3)
+    Requirement already satisfied: terminado&gt;=0.8.1 in /usr/local/lib/python3.7/dist-packages (from notebook-&gt;jupyter-&gt;d2l) (0.12.1)
+    Requirement already satisfied: python-dateutil&gt;=2.1 in /usr/local/lib/python3.7/dist-packages (from jupyter-client-&gt;ipykernel-&gt;jupyter-&gt;d2l) (2.8.2)
+    Requirement already satisfied: pyzmq&gt;=13 in /usr/local/lib/python3.7/dist-packages (from jupyter-client-&gt;ipykernel-&gt;jupyter-&gt;d2l) (22.3.0)
+    Requirement already satisfied: ptyprocess in /usr/local/lib/python3.7/dist-packages (from terminado&gt;=0.8.1-&gt;notebook-&gt;jupyter-&gt;d2l) (0.7.0)
+    Requirement already satisfied: MarkupSafe&gt;=0.23 in /usr/local/lib/python3.7/dist-packages (from jinja2-&gt;notebook-&gt;jupyter-&gt;d2l) (2.0.1)
+    Requirement already satisfied: cycler&gt;=0.10 in /usr/local/lib/python3.7/dist-packages (from matplotlib-&gt;d2l) (0.10.0)
+    Requirement already satisfied: pyparsing!=2.0.4,!=2.1.2,!=2.1.6,&gt;=2.0.1 in /usr/local/lib/python3.7/dist-packages (from matplotlib-&gt;d2l) (2.4.7)
+    Requirement already satisfied: kiwisolver&gt;=1.0.1 in /usr/local/lib/python3.7/dist-packages (from matplotlib-&gt;d2l) (1.3.2)
+    Requirement already satisfied: mistune&lt;2,&gt;=0.8.1 in /usr/local/lib/python3.7/dist-packages (from nbconvert-&gt;jupyter-&gt;d2l) (0.8.4)
+    Requirement already satisfied: entrypoints&gt;=0.2.2 in /usr/local/lib/python3.7/dist-packages (from nbconvert-&gt;jupyter-&gt;d2l) (0.3)
+    Requirement already satisfied: bleach in /usr/local/lib/python3.7/dist-packages (from nbconvert-&gt;jupyter-&gt;d2l) (4.1.0)
+    Requirement already satisfied: pandocfilters&gt;=1.4.1 in /usr/local/lib/python3.7/dist-packages (from nbconvert-&gt;jupyter-&gt;d2l) (1.5.0)
+    Requirement already satisfied: testpath in /usr/local/lib/python3.7/dist-packages (from nbconvert-&gt;jupyter-&gt;d2l) (0.5.0)
+    Requirement already satisfied: defusedxml in /usr/local/lib/python3.7/dist-packages (from nbconvert-&gt;jupyter-&gt;d2l) (0.7.1)
+    Requirement already satisfied: packaging in /usr/local/lib/python3.7/dist-packages (from bleach-&gt;nbconvert-&gt;jupyter-&gt;d2l) (21.0)
+    Requirement already satisfied: webencodings in /usr/local/lib/python3.7/dist-packages (from bleach-&gt;nbconvert-&gt;jupyter-&gt;d2l) (0.5.1)
+    Requirement already satisfied: pytz&gt;=2017.2 in /usr/local/lib/python3.7/dist-packages (from pandas-&gt;d2l) (2018.9)
+    Requirement already satisfied: qtpy in /usr/local/lib/python3.7/dist-packages (from qtconsole-&gt;jupyter-&gt;d2l) (1.11.2)
+    Requirement already satisfied: urllib3!=1.25.0,!=1.25.1,&lt;1.26,&gt;=1.21.1 in /usr/local/lib/python3.7/dist-packages (from requests-&gt;d2l) (1.24.3)
+    Requirement already satisfied: chardet&lt;4,&gt;=3.0.2 in /usr/local/lib/python3.7/dist-packages (from requests-&gt;d2l) (3.0.4)
+    Requirement already satisfied: idna&lt;3,&gt;=2.5 in /usr/local/lib/python3.7/dist-packages (from requests-&gt;d2l) (2.10)
+    Requirement already satisfied: certifi&gt;=2017.4.17 in /usr/local/lib/python3.7/dist-packages (from requests-&gt;d2l) (2021.5.30)
+    Installing collected packages: d2l
+    Successfully installed d2l-0.17.0</p>
+<p>We can <strong>test out the <code>dropout_layer</code> function on a few examples</strong>.
+In the following lines of code,
+we pass our input <code>X</code> through the dropout operation,
+with probabilities 0, 0.5, and 1, respectively.</p>
+<div class="codehilite"><pre><span></span><code><span class="n">X</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="mi">16</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">torch</span><span class="o">.</span><span class="n">float32</span><span class="p">)</span><span class="o">.</span><span class="n">reshape</span><span class="p">((</span><span class="mi">2</span><span class="p">,</span> <span class="mi">8</span><span class="p">))</span>
+<span class="nb">print</span><span class="p">(</span><span class="n">X</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="n">dropout_layer</span><span class="p">(</span><span class="n">X</span><span class="p">,</span> <span class="mf">0.</span><span class="p">))</span>
+<span class="nb">print</span><span class="p">(</span><span class="n">dropout_layer</span><span class="p">(</span><span class="n">X</span><span class="p">,</span> <span class="mf">0.5</span><span class="p">))</span>
+<span class="nb">print</span><span class="p">(</span><span class="n">dropout_layer</span><span class="p">(</span><span class="n">X</span><span class="p">,</span> <span class="mf">1.</span><span class="p">))</span>
+</code></pre></div>
+
+<div class="codehilite"><pre><span></span><code>tensor([[ 0.,  1.,  2.,  3.,  4.,  5.,  6.,  7.],
+        [ 8.,  9., 10., 11., 12., 13., 14., 15.]])
+tensor([[ 0.,  1.,  2.,  3.,  4.,  5.,  6.,  7.],
+        [ 8.,  9., 10., 11., 12., 13., 14., 15.]])
+tensor([[ 0.,  2.,  0.,  0.,  0., 10., 12.,  0.],
+        [ 0.,  0.,  0., 22., 24., 26.,  0., 30.]])
+tensor([[0., 0., 0., 0., 0., 0., 0., 0.],
+        [0., 0., 0., 0., 0., 0., 0., 0.]])
+</code></pre></div>
+
+<h3>Defining Model Parameters</h3>
+<p>Again, we work with the Fashion-MNIST dataset.
+We <strong>define an MLP with
+two hidden layers containing 256 units each.</strong></p>
+<div class="codehilite"><pre><span></span><code><span class="n">num_inputs</span><span class="p">,</span> <span class="n">num_outputs</span><span class="p">,</span> <span class="n">num_hiddens1</span><span class="p">,</span> <span class="n">num_hiddens2</span> <span class="o">=</span> <span class="mi">784</span><span class="p">,</span> <span class="mi">10</span><span class="p">,</span> <span class="mi">256</span><span class="p">,</span> <span class="mi">256</span>
+</code></pre></div>
+
+<h3>Defining the Model</h3>
+<p>The model below applies dropout to the output
+of each hidden layer (following the activation function).
+We can set dropout probabilities for each layer separately.
+A common trend is to set
+a lower dropout probability closer to the input layer.
+Below we set it to 0.2 and 0.5 for the first
+and second hidden layers, respectively.
+We ensure that dropout is only active during training.</p>
+<div class="codehilite"><pre><span></span><code><span class="n">dropout1</span><span class="p">,</span> <span class="n">dropout2</span> <span class="o">=</span> <span class="mf">0.2</span><span class="p">,</span> <span class="mf">0.5</span>
+
+<span class="k">class</span> <span class="nc">Net</span><span class="p">(</span><span class="n">nn</span><span class="o">.</span><span class="n">Module</span><span class="p">):</span>
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">num_inputs</span><span class="p">,</span> <span class="n">num_outputs</span><span class="p">,</span> <span class="n">num_hiddens1</span><span class="p">,</span> <span class="n">num_hiddens2</span><span class="p">,</span>
+                 <span class="n">is_training</span><span class="o">=</span><span class="kc">True</span><span class="p">):</span>
+        <span class="nb">super</span><span class="p">(</span><span class="n">Net</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="fm">__init__</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">num_inputs</span> <span class="o">=</span> <span class="n">num_inputs</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">training</span> <span class="o">=</span> <span class="n">is_training</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">lin1</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">Linear</span><span class="p">(</span><span class="n">num_inputs</span><span class="p">,</span> <span class="n">num_hiddens1</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">lin2</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">Linear</span><span class="p">(</span><span class="n">num_hiddens1</span><span class="p">,</span> <span class="n">num_hiddens2</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">lin3</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">Linear</span><span class="p">(</span><span class="n">num_hiddens2</span><span class="p">,</span> <span class="n">num_outputs</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">relu</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">ReLU</span><span class="p">()</span>
+
+    <span class="k">def</span> <span class="nf">forward</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">X</span><span class="p">):</span>
+        <span class="n">H1</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">relu</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">lin1</span><span class="p">(</span><span class="n">X</span><span class="o">.</span><span class="n">reshape</span><span class="p">((</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">num_inputs</span><span class="p">))))</span>
+        <span class="c1"># Use dropout only when training the model</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">training</span> <span class="o">==</span> <span class="kc">True</span><span class="p">:</span>
+            <span class="c1"># Add a dropout layer after the first fully connected layer</span>
+            <span class="n">H1</span> <span class="o">=</span> <span class="n">dropout_layer</span><span class="p">(</span><span class="n">H1</span><span class="p">,</span> <span class="n">dropout1</span><span class="p">)</span>
+        <span class="n">H2</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">relu</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">lin2</span><span class="p">(</span><span class="n">H1</span><span class="p">))</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">training</span> <span class="o">==</span> <span class="kc">True</span><span class="p">:</span>
+            <span class="c1"># Add a dropout layer after the second fully connected layer</span>
+            <span class="n">H2</span> <span class="o">=</span> <span class="n">dropout_layer</span><span class="p">(</span><span class="n">H2</span><span class="p">,</span> <span class="n">dropout2</span><span class="p">)</span>
+        <span class="n">out</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">lin3</span><span class="p">(</span><span class="n">H2</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">out</span>
+
+<span class="n">net</span> <span class="o">=</span> <span class="n">Net</span><span class="p">(</span><span class="n">num_inputs</span><span class="p">,</span> <span class="n">num_outputs</span><span class="p">,</span> <span class="n">num_hiddens1</span><span class="p">,</span> <span class="n">num_hiddens2</span><span class="p">)</span>
+</code></pre></div>
+
+<h3><strong>Training and Testing</strong></h3>
+<p>This is similar to the training and testing of MLPs described previously.</p>
+<div class="codehilite"><pre><span></span><code><span class="n">num_epochs</span><span class="p">,</span> <span class="n">lr</span><span class="p">,</span> <span class="n">batch_size</span> <span class="o">=</span> <span class="mi">10</span><span class="p">,</span> <span class="mf">0.5</span><span class="p">,</span> <span class="mi">256</span>
+<span class="n">loss</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">CrossEntropyLoss</span><span class="p">()</span>
+<span class="n">train_iter</span><span class="p">,</span> <span class="n">test_iter</span> <span class="o">=</span> <span class="n">d2l</span><span class="o">.</span><span class="n">load_data_fashion_mnist</span><span class="p">(</span><span class="n">batch_size</span><span class="p">)</span>
+<span class="n">trainer</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">optim</span><span class="o">.</span><span class="n">SGD</span><span class="p">(</span><span class="n">net</span><span class="o">.</span><span class="n">parameters</span><span class="p">(),</span> <span class="n">lr</span><span class="o">=</span><span class="n">lr</span><span class="p">)</span>
+<span class="n">d2l</span><span class="o">.</span><span class="n">train_ch3</span><span class="p">(</span><span class="n">net</span><span class="p">,</span> <span class="n">train_iter</span><span class="p">,</span> <span class="n">test_iter</span><span class="p">,</span> <span class="n">loss</span><span class="p">,</span> <span class="n">num_epochs</span><span class="p">,</span> <span class="n">trainer</span><span class="p">)</span>
+</code></pre></div>
+
+<p><img alt="svg" src="output_9_0.svg" /></p>
+<h2><strong>Concise Implementation</strong></h2>
+<p>With high-level APIs, all we need to do is add a <code>Dropout</code> layer
+after each fully-connected layer,
+passing in the dropout probability
+as the only argument to its constructor.
+During training, the <code>Dropout</code> layer will randomly
+drop out outputs of the previous layer
+(or equivalently, the inputs to the subsequent layer)
+according to the specified dropout probability.
+When not in training mode,
+the <code>Dropout</code> layer simply passes the data through during testing.</p>
+<div class="codehilite"><pre><span></span><code><span class="n">net</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">Sequential</span><span class="p">(</span>
+    <span class="n">nn</span><span class="o">.</span><span class="n">Flatten</span><span class="p">(),</span> <span class="n">nn</span><span class="o">.</span><span class="n">Linear</span><span class="p">(</span><span class="mi">784</span><span class="p">,</span> <span class="mi">256</span><span class="p">),</span> <span class="n">nn</span><span class="o">.</span><span class="n">ReLU</span><span class="p">(),</span>
+    <span class="c1"># Add a dropout layer after the first fully connected layer</span>
+    <span class="n">nn</span><span class="o">.</span><span class="n">Dropout</span><span class="p">(</span><span class="n">dropout1</span><span class="p">),</span> <span class="n">nn</span><span class="o">.</span><span class="n">Linear</span><span class="p">(</span><span class="mi">256</span><span class="p">,</span> <span class="mi">256</span><span class="p">),</span> <span class="n">nn</span><span class="o">.</span><span class="n">ReLU</span><span class="p">(),</span>
+    <span class="c1"># Add a dropout layer after the second fully connected layer</span>
+    <span class="n">nn</span><span class="o">.</span><span class="n">Dropout</span><span class="p">(</span><span class="n">dropout2</span><span class="p">),</span> <span class="n">nn</span><span class="o">.</span><span class="n">Linear</span><span class="p">(</span><span class="mi">256</span><span class="p">,</span> <span class="mi">10</span><span class="p">))</span>
+
+<span class="k">def</span> <span class="nf">init_weights</span><span class="p">(</span><span class="n">m</span><span class="p">):</span>
+    <span class="k">if</span> <span class="nb">type</span><span class="p">(</span><span class="n">m</span><span class="p">)</span> <span class="o">==</span> <span class="n">nn</span><span class="o">.</span><span class="n">Linear</span><span class="p">:</span>
+        <span class="n">nn</span><span class="o">.</span><span class="n">init</span><span class="o">.</span><span class="n">normal_</span><span class="p">(</span><span class="n">m</span><span class="o">.</span><span class="n">weight</span><span class="p">,</span> <span class="n">std</span><span class="o">=</span><span class="mf">0.01</span><span class="p">)</span>
+
+<span class="n">net</span><span class="o">.</span><span class="n">apply</span><span class="p">(</span><span class="n">init_weights</span><span class="p">);</span>
+</code></pre></div>
+
+<p>Next, we <strong>train and test the model</strong>.</p>
+<div class="codehilite"><pre><span></span><code><span class="n">trainer</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">optim</span><span class="o">.</span><span class="n">SGD</span><span class="p">(</span><span class="n">net</span><span class="o">.</span><span class="n">parameters</span><span class="p">(),</span> <span class="n">lr</span><span class="o">=</span><span class="n">lr</span><span class="p">)</span>
+<span class="n">d2l</span><span class="o">.</span><span class="n">train_ch3</span><span class="p">(</span><span class="n">net</span><span class="p">,</span> <span class="n">train_iter</span><span class="p">,</span> <span class="n">test_iter</span><span class="p">,</span> <span class="n">loss</span><span class="p">,</span> <span class="n">num_epochs</span><span class="p">,</span> <span class="n">trainer</span><span class="p">)</span>
+</code></pre></div>
+
+<p><img alt="svg" src="output_13_0.svg" /></p>
+<h2>Summary</h2>
+<ul>
+<li>Beyond controlling the number of dimensions and the size of the weight vector, dropout is yet another tool to avoid overfitting. Often they are used jointly.</li>
+<li>Dropout replaces an activation $h$ with a random variable with expected value $h$.</li>
+<li>Dropout is only used during training.</li>
+</ul>
+<h2>Exercises</h2>
+<ol>
+<li>
+<p>Why is dropout not typically used at test time?</p>
+</li>
+<li>
+<p>Is it a good idea to use dropout and weight decay together?</p>
+</li>
+<li>
+<p>What happens if we apply dropout to the individual weights of the weight matrix rather than the activations?</p>
+</li>
+</ol>
+<p><a href="https://discuss.d2l.ai/t/101">Discussions</a></p>
+</body>
+</html>

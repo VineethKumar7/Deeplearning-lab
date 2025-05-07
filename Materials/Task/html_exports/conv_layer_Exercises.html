@@ -1,0 +1,416 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8"/>
+  <title>conv_layer_Exercises.ipynb</title>
+</head>
+<body>
+<h1>Convolutions for Images</h1>
+<p>Now that we understand how convolutional layers work in theory,
+we are ready to see how they work in practice.
+Building on our motivation of convolutional neural networks
+as efficient architectures for exploring structure in image data,
+we stick with images as our running example.</p>
+<h2>The Cross-Correlation Operation</h2>
+<p>Recall that strictly speaking, convolutional layers
+are a  misnomer, since the operations they express
+are more accurately described as cross-correlations.
+Based on our descriptions of convolutional layers,
+in such a layer, an input tensor
+and a kernel tensor are combined
+to produce an output tensor through a <strong>cross-correlation operation.</strong></p>
+<p>Let us ignore channels for now and see how this works
+with two-dimensional data and hidden representations.
+In figure 6.2.1,
+the input is a two-dimensional tensor
+with a height of 3 and width of 3.
+We mark the shape of the tensor as $3 \times 3$ or ($3$, $3$).
+The height and width of the kernel are both 2.
+The shape of the <em>kernel window</em> (or <em>convolution window</em>)
+is given by the height and width of the kernel
+(here it is $2 \times 2$) (please look here: https://d2l.ai/chapter_convolutional-neural-networks/conv-layer.html)</p>
+<p>In the two-dimensional cross-correlation operation,
+we begin with the convolution window positioned
+at the upper-left corner of the input tensor
+and slide it across the input tensor,
+both from left to right and top to bottom.
+When the convolution window slides to a certain position,
+the input subtensor contained in that window
+and the kernel tensor are multiplied elementwise
+and the resulting tensor is summed up
+yielding a single scalar value.
+This result gives the value of the output tensor
+at the corresponding location.
+Here, the output tensor has a height of 2 and width of 2
+and the four elements are derived from
+the two-dimensional cross-correlation operation:</p>
+<p>$$
+0\times0+1\times1+3\times2+4\times3=19,\
+1\times0+2\times1+4\times2+5\times3=25,\
+3\times0+4\times1+6\times2+7\times3=37,\
+4\times0+5\times1+7\times2+8\times3=43.
+$$</p>
+<p>Note that along each axis, the output size
+is slightly smaller than the input size.
+Because the kernel has width and height greater than one,
+we can only properly compute the cross-correlation
+for locations where the kernel fits wholly within the image,
+the output size is given by the input size $n_h \times n_w$
+minus the size of the convolution kernel $k_h \times k_w$
+via</p>
+<p>$$(n_h-k_h+1) \times (n_w-k_w+1).$$</p>
+<p>This is the case since we need enough space
+to "shift" the convolution kernel across the image.
+Later we will see how to keep the size unchanged
+by padding the image with zeros around its boundary
+so that there is enough space to shift the kernel.
+Next, we implement this process in the <code>corr2d</code> function,
+which accepts an input tensor <code>X</code> and a kernel tensor <code>K</code>
+and returns an output tensor <code>Y</code>.</p>
+<div class="codehilite"><pre><span></span><code><span class="c1">#This line is only needed in google colab</span>
+<span class="err">!</span> <span class="n">pip</span> <span class="n">install</span> <span class="n">d2l</span>
+
+<span class="kn">import</span> <span class="nn">torch</span>
+<span class="kn">from</span> <span class="nn">torch</span> <span class="kn">import</span> <span class="n">nn</span>
+<span class="kn">from</span> <span class="nn">d2l</span> <span class="kn">import</span> <span class="n">torch</span> <span class="k">as</span> <span class="n">d2l</span>
+</code></pre></div>
+
+<div class="codehilite"><pre><span></span><code><span class="n">Collecting</span><span class="w"> </span><span class="n">d2l</span>
+<span class="w">  </span><span class="n">Downloading</span><span class="w"> </span><span class="n">d2l</span><span class="o">-</span><span class="mf">0.17</span><span class="o">.</span><span class="mi">0</span><span class="o">-</span><span class="n">py3</span><span class="o">-</span><span class="n">none</span><span class="o">-</span><span class="n">any</span><span class="o">.</span><span class="n">whl</span><span class="w"> </span><span class="p">(</span><span class="mi">83</span><span class="w"> </span><span class="n">kB</span><span class="p">)</span>
+<span class="err"></span><span class="p">[</span><span class="err">?</span><span class="mi">25</span><span class="n">l</span>
+</code></pre></div>
+
+<p>[K     |████                            | 10 kB 28.1 MB/s eta 0:00:01
+[K     |███████▉                        | 20 kB 36.8 MB/s eta 0:00:01
+[K     |███████████▉                    | 30 kB 27.7 MB/s eta 0:00:01
+[K     |███████████████▊                | 40 kB 22.2 MB/s eta 0:00:01
+[K     |███████████████████▊            | 51 kB 17.7 MB/s eta 0:00:01
+[K     |███████████████████████▋        | 61 kB 14.2 MB/s eta 0:00:01
+[K     |███████████████████████████▋    | 71 kB 13.6 MB/s eta 0:00:01
+[K     |███████████████████████████████▌| 81 kB 15.1 MB/s eta 0:00:01
+[K     |████████████████████████████████| 83 kB 1.2 MB/s 
+    [?25hRequirement already satisfied: numpy in /usr/local/lib/python3.7/dist-packages (from d2l) (1.19.5)
+    Requirement already satisfied: jupyter in /usr/local/lib/python3.7/dist-packages (from d2l) (1.0.0)
+    Requirement already satisfied: requests in /usr/local/lib/python3.7/dist-packages (from d2l) (2.23.0)
+    Requirement already satisfied: pandas in /usr/local/lib/python3.7/dist-packages (from d2l) (1.1.5)
+    Requirement already satisfied: matplotlib in /usr/local/lib/python3.7/dist-packages (from d2l) (3.2.2)
+    Requirement already satisfied: nbconvert in /usr/local/lib/python3.7/dist-packages (from jupyter-&gt;d2l) (5.6.1)
+    Requirement already satisfied: ipykernel in /usr/local/lib/python3.7/dist-packages (from jupyter-&gt;d2l) (4.10.1)
+    Requirement already satisfied: jupyter-console in /usr/local/lib/python3.7/dist-packages (from jupyter-&gt;d2l) (5.2.0)
+    Requirement already satisfied: qtconsole in /usr/local/lib/python3.7/dist-packages (from jupyter-&gt;d2l) (5.1.1)
+    Requirement already satisfied: ipywidgets in /usr/local/lib/python3.7/dist-packages (from jupyter-&gt;d2l) (7.6.5)
+    Requirement already satisfied: notebook in /usr/local/lib/python3.7/dist-packages (from jupyter-&gt;d2l) (5.3.1)
+    Requirement already satisfied: tornado&gt;=4.0 in /usr/local/lib/python3.7/dist-packages (from ipykernel-&gt;jupyter-&gt;d2l) (5.1.1)
+    Requirement already satisfied: traitlets&gt;=4.1.0 in /usr/local/lib/python3.7/dist-packages (from ipykernel-&gt;jupyter-&gt;d2l) (5.1.1)
+    Requirement already satisfied: ipython&gt;=4.0.0 in /usr/local/lib/python3.7/dist-packages (from ipykernel-&gt;jupyter-&gt;d2l) (5.5.0)
+    Requirement already satisfied: jupyter-client in /usr/local/lib/python3.7/dist-packages (from ipykernel-&gt;jupyter-&gt;d2l) (5.3.5)
+    Requirement already satisfied: simplegeneric&gt;0.8 in /usr/local/lib/python3.7/dist-packages (from ipython&gt;=4.0.0-&gt;ipykernel-&gt;jupyter-&gt;d2l) (0.8.1)
+    Requirement already satisfied: pickleshare in /usr/local/lib/python3.7/dist-packages (from ipython&gt;=4.0.0-&gt;ipykernel-&gt;jupyter-&gt;d2l) (0.7.5)
+    Requirement already satisfied: pexpect in /usr/local/lib/python3.7/dist-packages (from ipython&gt;=4.0.0-&gt;ipykernel-&gt;jupyter-&gt;d2l) (4.8.0)
+    Requirement already satisfied: pygments in /usr/local/lib/python3.7/dist-packages (from ipython&gt;=4.0.0-&gt;ipykernel-&gt;jupyter-&gt;d2l) (2.6.1)
+    Requirement already satisfied: setuptools&gt;=18.5 in /usr/local/lib/python3.7/dist-packages (from ipython&gt;=4.0.0-&gt;ipykernel-&gt;jupyter-&gt;d2l) (57.4.0)
+    Requirement already satisfied: decorator in /usr/local/lib/python3.7/dist-packages (from ipython&gt;=4.0.0-&gt;ipykernel-&gt;jupyter-&gt;d2l) (4.4.2)
+    Requirement already satisfied: prompt-toolkit&lt;2.0.0,&gt;=1.0.4 in /usr/local/lib/python3.7/dist-packages (from ipython&gt;=4.0.0-&gt;ipykernel-&gt;jupyter-&gt;d2l) (1.0.18)
+    Requirement already satisfied: wcwidth in /usr/local/lib/python3.7/dist-packages (from prompt-toolkit&lt;2.0.0,&gt;=1.0.4-&gt;ipython&gt;=4.0.0-&gt;ipykernel-&gt;jupyter-&gt;d2l) (0.2.5)
+    Requirement already satisfied: six&gt;=1.9.0 in /usr/local/lib/python3.7/dist-packages (from prompt-toolkit&lt;2.0.0,&gt;=1.0.4-&gt;ipython&gt;=4.0.0-&gt;ipykernel-&gt;jupyter-&gt;d2l) (1.15.0)
+    Requirement already satisfied: widgetsnbextension~=3.5.0 in /usr/local/lib/python3.7/dist-packages (from ipywidgets-&gt;jupyter-&gt;d2l) (3.5.2)
+    Requirement already satisfied: nbformat&gt;=4.2.0 in /usr/local/lib/python3.7/dist-packages (from ipywidgets-&gt;jupyter-&gt;d2l) (5.1.3)
+    Requirement already satisfied: jupyterlab-widgets&gt;=1.0.0 in /usr/local/lib/python3.7/dist-packages (from ipywidgets-&gt;jupyter-&gt;d2l) (1.0.2)
+    Requirement already satisfied: ipython-genutils~=0.2.0 in /usr/local/lib/python3.7/dist-packages (from ipywidgets-&gt;jupyter-&gt;d2l) (0.2.0)
+    Requirement already satisfied: jsonschema!=2.5.0,&gt;=2.4 in /usr/local/lib/python3.7/dist-packages (from nbformat&gt;=4.2.0-&gt;ipywidgets-&gt;jupyter-&gt;d2l) (2.6.0)
+    Requirement already satisfied: jupyter-core in /usr/local/lib/python3.7/dist-packages (from nbformat&gt;=4.2.0-&gt;ipywidgets-&gt;jupyter-&gt;d2l) (4.9.1)
+    Requirement already satisfied: Send2Trash in /usr/local/lib/python3.7/dist-packages (from notebook-&gt;jupyter-&gt;d2l) (1.8.0)
+    Requirement already satisfied: jinja2 in /usr/local/lib/python3.7/dist-packages (from notebook-&gt;jupyter-&gt;d2l) (2.11.3)
+    Requirement already satisfied: terminado&gt;=0.8.1 in /usr/local/lib/python3.7/dist-packages (from notebook-&gt;jupyter-&gt;d2l) (0.12.1)
+    Requirement already satisfied: python-dateutil&gt;=2.1 in /usr/local/lib/python3.7/dist-packages (from jupyter-client-&gt;ipykernel-&gt;jupyter-&gt;d2l) (2.8.2)
+    Requirement already satisfied: pyzmq&gt;=13 in /usr/local/lib/python3.7/dist-packages (from jupyter-client-&gt;ipykernel-&gt;jupyter-&gt;d2l) (22.3.0)
+    Requirement already satisfied: ptyprocess in /usr/local/lib/python3.7/dist-packages (from terminado&gt;=0.8.1-&gt;notebook-&gt;jupyter-&gt;d2l) (0.7.0)
+    Requirement already satisfied: MarkupSafe&gt;=0.23 in /usr/local/lib/python3.7/dist-packages (from jinja2-&gt;notebook-&gt;jupyter-&gt;d2l) (2.0.1)
+    Requirement already satisfied: kiwisolver&gt;=1.0.1 in /usr/local/lib/python3.7/dist-packages (from matplotlib-&gt;d2l) (1.3.2)
+    Requirement already satisfied: cycler&gt;=0.10 in /usr/local/lib/python3.7/dist-packages (from matplotlib-&gt;d2l) (0.11.0)
+    Requirement already satisfied: pyparsing!=2.0.4,!=2.1.2,!=2.1.6,&gt;=2.0.1 in /usr/local/lib/python3.7/dist-packages (from matplotlib-&gt;d2l) (2.4.7)
+    Requirement already satisfied: entrypoints&gt;=0.2.2 in /usr/local/lib/python3.7/dist-packages (from nbconvert-&gt;jupyter-&gt;d2l) (0.3)
+    Requirement already satisfied: bleach in /usr/local/lib/python3.7/dist-packages (from nbconvert-&gt;jupyter-&gt;d2l) (4.1.0)
+    Requirement already satisfied: mistune&lt;2,&gt;=0.8.1 in /usr/local/lib/python3.7/dist-packages (from nbconvert-&gt;jupyter-&gt;d2l) (0.8.4)
+    Requirement already satisfied: pandocfilters&gt;=1.4.1 in /usr/local/lib/python3.7/dist-packages (from nbconvert-&gt;jupyter-&gt;d2l) (1.5.0)
+    Requirement already satisfied: testpath in /usr/local/lib/python3.7/dist-packages (from nbconvert-&gt;jupyter-&gt;d2l) (0.5.0)
+    Requirement already satisfied: defusedxml in /usr/local/lib/python3.7/dist-packages (from nbconvert-&gt;jupyter-&gt;d2l) (0.7.1)
+    Requirement already satisfied: webencodings in /usr/local/lib/python3.7/dist-packages (from bleach-&gt;nbconvert-&gt;jupyter-&gt;d2l) (0.5.1)
+    Requirement already satisfied: packaging in /usr/local/lib/python3.7/dist-packages (from bleach-&gt;nbconvert-&gt;jupyter-&gt;d2l) (21.2)
+    Requirement already satisfied: pytz&gt;=2017.2 in /usr/local/lib/python3.7/dist-packages (from pandas-&gt;d2l) (2018.9)
+    Requirement already satisfied: qtpy in /usr/local/lib/python3.7/dist-packages (from qtconsole-&gt;jupyter-&gt;d2l) (1.11.2)
+    Requirement already satisfied: urllib3!=1.25.0,!=1.25.1,&lt;1.26,&gt;=1.21.1 in /usr/local/lib/python3.7/dist-packages (from requests-&gt;d2l) (1.24.3)
+    Requirement already satisfied: certifi&gt;=2017.4.17 in /usr/local/lib/python3.7/dist-packages (from requests-&gt;d2l) (2021.10.8)
+    Requirement already satisfied: chardet&lt;4,&gt;=3.0.2 in /usr/local/lib/python3.7/dist-packages (from requests-&gt;d2l) (3.0.4)
+    Requirement already satisfied: idna&lt;3,&gt;=2.5 in /usr/local/lib/python3.7/dist-packages (from requests-&gt;d2l) (2.10)
+    Installing collected packages: d2l
+    Successfully installed d2l-0.17.0</p>
+<div class="codehilite"><pre><span></span><code><span class="k">def</span> <span class="nf">corr2d</span><span class="p">(</span><span class="n">X</span><span class="p">,</span> <span class="n">K</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Compute 2D cross-correlation.&quot;&quot;&quot;</span>
+    <span class="n">h</span><span class="p">,</span> <span class="n">w</span> <span class="o">=</span> <span class="n">K</span><span class="o">.</span><span class="n">shape</span>
+    <span class="n">Y</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="n">X</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">-</span> <span class="n">h</span> <span class="o">+</span> <span class="mi">1</span><span class="p">,</span> <span class="n">X</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">-</span> <span class="n">w</span> <span class="o">+</span> <span class="mi">1</span><span class="p">))</span>
+    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">Y</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]):</span>
+        <span class="k">for</span> <span class="n">j</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">Y</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]):</span>
+            <span class="n">Y</span><span class="p">[</span><span class="n">i</span><span class="p">,</span> <span class="n">j</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span><span class="n">X</span><span class="p">[</span><span class="n">i</span><span class="p">:</span><span class="n">i</span> <span class="o">+</span> <span class="n">h</span><span class="p">,</span> <span class="n">j</span><span class="p">:</span><span class="n">j</span> <span class="o">+</span> <span class="n">w</span><span class="p">]</span> <span class="o">*</span> <span class="n">K</span><span class="p">)</span><span class="o">.</span><span class="n">sum</span><span class="p">()</span>
+    <span class="k">return</span> <span class="n">Y</span>
+</code></pre></div>
+
+<p>We can construct the input tensor <code>X</code> and the kernel tensor <code>K</code>
+from figure 6.2.1
+to <strong>validate the output of the above implementation</strong>
+of the two-dimensional cross-correlation operation.</p>
+<div class="codehilite"><pre><span></span><code><span class="n">X</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">tensor</span><span class="p">([[</span><span class="mf">0.0</span><span class="p">,</span> <span class="mf">1.0</span><span class="p">,</span> <span class="mf">2.0</span><span class="p">],</span> <span class="p">[</span><span class="mf">3.0</span><span class="p">,</span> <span class="mf">4.0</span><span class="p">,</span> <span class="mf">5.0</span><span class="p">],</span> <span class="p">[</span><span class="mf">6.0</span><span class="p">,</span> <span class="mf">7.0</span><span class="p">,</span> <span class="mf">8.0</span><span class="p">]])</span>
+<span class="n">K</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">tensor</span><span class="p">([[</span><span class="mf">0.0</span><span class="p">,</span> <span class="mf">1.0</span><span class="p">],</span> <span class="p">[</span><span class="mf">2.0</span><span class="p">,</span> <span class="mf">3.0</span><span class="p">]])</span>
+<span class="n">corr2d</span><span class="p">(</span><span class="n">X</span><span class="p">,</span> <span class="n">K</span><span class="p">)</span>
+</code></pre></div>
+
+<div class="codehilite"><pre><span></span><code>tensor([[19., 25.],
+        [37., 43.]])
+</code></pre></div>
+
+<h2>Convolutional Layers</h2>
+<p>A convolutional layer cross-correlates the input and kernel
+and adds a scalar bias to produce an output.
+The two parameters of a convolutional layer
+are the kernel and the scalar bias.
+When training models based on convolutional layers,
+we typically initialize the kernels randomly,
+just as we would with a fully-connected layer.</p>
+<p>We are now ready to <strong>implement a two-dimensional convolutional layer</strong>
+based on the <code>corr2d</code> function defined above.
+In the <code>__init__</code> constructor function,
+we declare <code>weight</code> and <code>bias</code> as the two model parameters.
+The forward propagation function
+calls the <code>corr2d</code> function and adds the bias.</p>
+<div class="codehilite"><pre><span></span><code><span class="k">class</span> <span class="nc">Conv2D</span><span class="p">(</span><span class="n">nn</span><span class="o">.</span><span class="n">Module</span><span class="p">):</span>
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">kernel_size</span><span class="p">):</span>
+        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">weight</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">Parameter</span><span class="p">(</span><span class="n">torch</span><span class="o">.</span><span class="n">rand</span><span class="p">(</span><span class="n">kernel_size</span><span class="p">))</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">bias</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">Parameter</span><span class="p">(</span><span class="n">torch</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="mi">1</span><span class="p">))</span>
+
+    <span class="k">def</span> <span class="nf">forward</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">corr2d</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">weight</span><span class="p">)</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">bias</span>
+</code></pre></div>
+
+<p>In
+$h \times w$ convolution
+or a $h \times w$ convolution kernel,
+the height and width of the convolution kernel are $h$ and $w$, respectively.
+We also refer to
+a convolutional layer with a $h \times w$
+convolution kernel simply as a $h \times w$ convolutional layer.</p>
+<h2>Object Edge Detection in Images</h2>
+<p>Let us take a moment to parse <strong>a simple application of a convolutional layer:
+detecting the edge of an object in an image</strong>
+by finding the location of the pixel change.
+First, we construct an "image" of $6\times 8$ pixels.
+The middle four columns are black (0) and the rest are white (1).</p>
+<div class="codehilite"><pre><span></span><code><span class="n">X</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">ones</span><span class="p">((</span><span class="mi">6</span><span class="p">,</span> <span class="mi">8</span><span class="p">))</span>
+<span class="n">X</span><span class="p">[:,</span> <span class="mi">2</span><span class="p">:</span><span class="mi">6</span><span class="p">]</span> <span class="o">=</span> <span class="mi">0</span>
+<span class="n">X</span>
+</code></pre></div>
+
+<div class="codehilite"><pre><span></span><code>tensor([[1., 1., 0., 0., 0., 0., 1., 1.],
+        [1., 1., 0., 0., 0., 0., 1., 1.],
+        [1., 1., 0., 0., 0., 0., 1., 1.],
+        [1., 1., 0., 0., 0., 0., 1., 1.],
+        [1., 1., 0., 0., 0., 0., 1., 1.],
+        [1., 1., 0., 0., 0., 0., 1., 1.]])
+</code></pre></div>
+
+<p>Next, we construct a kernel <code>K</code> with a height of 1 and a width of 2.
+When we perform the cross-correlation operation with the input,
+if the horizontally adjacent elements are the same,
+the output is 0. Otherwise, the output is non-zero.</p>
+<div class="codehilite"><pre><span></span><code><span class="n">K</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">tensor</span><span class="p">([[</span><span class="mf">1.0</span><span class="p">,</span> <span class="o">-</span><span class="mf">1.0</span><span class="p">]])</span>
+</code></pre></div>
+
+<p>We are ready to perform the cross-correlation operation
+with arguments <code>X</code> (our input) and <code>K</code> (our kernel).
+As you can see, <strong>we detect 1 for the edge from white to black
+and -1 for the edge from black to white.</strong>
+All other outputs take value 0.</p>
+<div class="codehilite"><pre><span></span><code><span class="n">Y</span> <span class="o">=</span> <span class="n">corr2d</span><span class="p">(</span><span class="n">X</span><span class="p">,</span> <span class="n">K</span><span class="p">)</span>
+<span class="n">Y</span>
+</code></pre></div>
+
+<div class="codehilite"><pre><span></span><code>tensor([[ 0.,  1.,  0.,  0.,  0., -1.,  0.],
+        [ 0.,  1.,  0.,  0.,  0., -1.,  0.],
+        [ 0.,  1.,  0.,  0.,  0., -1.,  0.],
+        [ 0.,  1.,  0.,  0.,  0., -1.,  0.],
+        [ 0.,  1.,  0.,  0.,  0., -1.,  0.],
+        [ 0.,  1.,  0.,  0.,  0., -1.,  0.]])
+</code></pre></div>
+
+<p>We can now apply the kernel to the transposed image.
+As expected, it vanishes. <strong>The kernel <code>K</code> only detects vertical edges.</strong></p>
+<div class="codehilite"><pre><span></span><code><span class="n">corr2d</span><span class="p">(</span><span class="n">X</span><span class="o">.</span><span class="n">t</span><span class="p">(),</span> <span class="n">K</span><span class="p">)</span>
+</code></pre></div>
+
+<div class="codehilite"><pre><span></span><code>tensor([[0., 0., 0., 0., 0.],
+        [0., 0., 0., 0., 0.],
+        [0., 0., 0., 0., 0.],
+        [0., 0., 0., 0., 0.],
+        [0., 0., 0., 0., 0.],
+        [0., 0., 0., 0., 0.],
+        [0., 0., 0., 0., 0.],
+        [0., 0., 0., 0., 0.]])
+</code></pre></div>
+
+<h2>Learning a Kernel</h2>
+<p>Designing an edge detector by finite differences <code>[1, -1]</code> is neat
+if we know this is precisely what we are looking for.
+However, as we look at larger kernels,
+and consider successive layers of convolutions,
+it might be impossible to specify
+precisely what each filter should be doing manually.</p>
+<p>Now let us see whether we can <strong>learn the kernel that generated <code>Y</code> from <code>X</code></strong>
+by looking at the input--output pairs only.
+We first construct a convolutional layer
+and initialize its kernel as a random tensor.
+Next, in each iteration, we will use the squared error
+to compare <code>Y</code> with the output of the convolutional layer.
+We can then calculate the gradient to update the kernel.
+For the sake of simplicity,
+in the following
+we use the built-in class
+for two-dimensional convolutional layers
+and ignore the bias.</p>
+<div class="codehilite"><pre><span></span><code><span class="c1"># Construct a two-dimensional convolutional layer with 1 output channel and a</span>
+<span class="c1"># kernel of shape (1, 2). For the sake of simplicity, we ignore the bias here</span>
+<span class="n">conv2d</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">Conv2d</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="n">kernel_size</span><span class="o">=</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">),</span> <span class="n">bias</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+
+<span class="c1"># The two-dimensional convolutional layer uses four-dimensional input and</span>
+<span class="c1"># output in the format of (example, channel, height, width), where the batch</span>
+<span class="c1"># size (number of examples in the batch) and the number of channels are both 1</span>
+<span class="n">X</span> <span class="o">=</span> <span class="n">X</span><span class="o">.</span><span class="n">reshape</span><span class="p">((</span><span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">6</span><span class="p">,</span> <span class="mi">8</span><span class="p">))</span>
+<span class="n">Y</span> <span class="o">=</span> <span class="n">Y</span><span class="o">.</span><span class="n">reshape</span><span class="p">((</span><span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">6</span><span class="p">,</span> <span class="mi">7</span><span class="p">))</span>
+<span class="n">lr</span> <span class="o">=</span> <span class="mf">3e-2</span>  <span class="c1"># Learning rate</span>
+
+<span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">10</span><span class="p">):</span>
+    <span class="n">Y_hat</span> <span class="o">=</span> <span class="n">conv2d</span><span class="p">(</span><span class="n">X</span><span class="p">)</span>
+    <span class="n">l</span> <span class="o">=</span> <span class="p">(</span><span class="n">Y_hat</span> <span class="o">-</span> <span class="n">Y</span><span class="p">)</span><span class="o">**</span><span class="mi">2</span>
+    <span class="n">conv2d</span><span class="o">.</span><span class="n">zero_grad</span><span class="p">()</span>
+    <span class="n">l</span><span class="o">.</span><span class="n">sum</span><span class="p">()</span><span class="o">.</span><span class="n">backward</span><span class="p">()</span>
+    <span class="c1"># Update the kernel</span>
+    <span class="n">conv2d</span><span class="o">.</span><span class="n">weight</span><span class="o">.</span><span class="n">data</span><span class="p">[:]</span> <span class="o">-=</span> <span class="n">lr</span> <span class="o">*</span> <span class="n">conv2d</span><span class="o">.</span><span class="n">weight</span><span class="o">.</span><span class="n">grad</span>
+    <span class="k">if</span> <span class="p">(</span><span class="n">i</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span> <span class="o">%</span> <span class="mi">2</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;batch </span><span class="si">{</span><span class="n">i</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="si">}</span><span class="s1">, loss </span><span class="si">{</span><span class="n">l</span><span class="o">.</span><span class="n">sum</span><span class="p">()</span><span class="si">:</span><span class="s1">.3f</span><span class="si">}</span><span class="s1">&#39;</span><span class="p">)</span>
+</code></pre></div>
+
+<div class="codehilite"><pre><span></span><code>batch 2, loss 12.001
+batch 4, loss 12.025
+batch 6, loss 12.764
+batch 8, loss 35.700
+batch 10, loss 747.193
+</code></pre></div>
+
+<p>Note that the error has dropped to a small value after 10 iterations. Now we will <strong>take a look at the kernel tensor we learned.</strong></p>
+<div class="codehilite"><pre><span></span><code><span class="n">conv2d</span><span class="o">.</span><span class="n">weight</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">reshape</span><span class="p">((</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">))</span>
+</code></pre></div>
+
+<div class="codehilite"><pre><span></span><code>tensor([[ 0.9827, -0.9844]])
+</code></pre></div>
+
+<p>Indeed, the learned kernel tensor is remarkably close
+to the kernel tensor <code>K</code> we defined earlier.</p>
+<h2>Cross-Correlation and Convolution</h2>
+<p>Recall our observation of the correspondence
+between the cross-correlation and convolution operations.
+Here let us continue to consider two-dimensional convolutional layers.
+What if such layers
+perform strict convolution operations
+instead of cross-correlations?
+In order to obtain the output of the strict <em>convolution</em> operation, we only need to flip the two-dimensional kernel tensor both horizontally and vertically, and then perform the <em>cross-correlation</em> operation with the input tensor.</p>
+<p>It is noteworthy that since kernels are learned from data in deep learning,
+the outputs of convolutional layers remain unaffected
+no matter such layers
+perform
+either the strict convolution operations
+or the cross-correlation operations.</p>
+<p>To illustrate this, suppose that a convolutional layer performs <em>cross-correlation</em> and learns the kernel in figure 6.2.1, which is denoted as the matrix $\mathbf{K}$ here.
+Assuming that other conditions remain unchanged,
+when this layer performs strict <em>convolution</em> instead,
+the learned kernel $\mathbf{K}'$ will be the same as $\mathbf{K}$
+after $\mathbf{K}'$ is
+flipped both horizontally and vertically.
+That is to say,
+when the convolutional layer
+performs strict <em>convolution</em>
+for the input in figure 6.2.1
+and $\mathbf{K}'$,
+the same output in figure 6.2.1
+(cross-correlation of the input and $\mathbf{K}$)
+will be obtained.</p>
+<p>In keeping with standard terminology with deep learning literature,
+we will continue to refer to the cross-correlation operation
+as a convolution even though, strictly-speaking, it is slightly different.
+Besides,
+we use the term <em>element</em> to refer to
+an entry (or component) of any tensor representing a layer representation or a convolution kernel.</p>
+<h2>Feature Map and Receptive Field</h2>
+<p>the convolutional layer output in
+figure 6.2.1
+is sometimes called a <em>feature map</em>,
+as it can be regarded as
+the learned representations (features)
+in the spatial dimensions (e.g., width and height)
+to the subsequent layer.
+In CNNs,
+for any element $x$ of some layer,
+its <em>receptive field</em> refers to
+all the elements (from all the previous layers)
+that may affect the calculation of $x$
+during the forward propagation.
+Note that the receptive field
+may be larger than the actual size of the input.</p>
+<p>Let us continue to use figure 6.2.1 to explain the receptive field.
+Given the $2 \times 2$ convolution kernel,
+the receptive field of the shaded output element (of value $19$)
+is
+the four elements in the shaded portion of the input.
+Now let us denote the $2 \times 2$
+output as $\mathbf{Y}$
+and consider a deeper CNN
+with an additional $2 \times 2$ convolutional layer that takes $\mathbf{Y}$
+as its input, outputting
+a single element $z$.
+In this case,
+the receptive field of $z$
+on $\mathbf{Y}$ includes all the four elements of $\mathbf{Y}$,
+while
+the receptive field
+on the input includes all the nine input elements.
+Thus,
+when any element in a feature map
+needs a larger receptive field
+to detect input features over a broader area,
+we can build a deeper network.</p>
+<h2>Summary</h2>
+<ul>
+<li>The core computation of a two-dimensional convolutional layer is a two-dimensional cross-correlation operation. In its simplest form, this performs a cross-correlation operation on the two-dimensional input data and the kernel, and then adds a bias.</li>
+<li>We can design a kernel to detect edges in images.</li>
+<li>We can learn the kernel's parameters from data.</li>
+<li>With kernels learned from data, the outputs of convolutional layers remain unaffected regardless of such layers' performed operations (either strict convolution or cross-correlation).</li>
+<li>When any element in a feature map needs a larger receptive field to detect broader features on the input, a deeper network can be considered.</li>
+</ul>
+<h2>Exercises</h2>
+<ol>
+<li>
+<p>Construct an image <code>X</code> with diagonal edges.</p>
+<ol>
+<li>What happens if you apply the kernel <code>K</code> in this section to it?</li>
+<li>What happens if you transpose <code>X</code>?</li>
+<li>What happens if you transpose <code>K</code>?</li>
+</ol>
+</li>
+<li>
+<p>Do some literature research about edge detection and the Sobel Operator</p>
+</li>
+<li>
+<p>Apply the Sobel Filter to X</p>
+</li>
+</ol>
+<p><a href="https://discuss.d2l.ai/t/66">Discussions</a></p>
+</body>
+</html>

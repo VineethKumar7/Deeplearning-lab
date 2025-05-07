@@ -1,0 +1,492 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8"/>
+  <title>batch_norm_Exercises.ipynb</title>
+</head>
+<body>
+<h1>Batch Normalization</h1>
+<p>Training deep neural networks is difficult.
+And getting them to converge in a reasonable amount of time can be tricky.
+In this section, we describe <em>batch normalization</em>, a popular and effective technique
+that consistently accelerates the convergence of deep networks.
+Together with residual blocks---covered later in---batch normalization
+has made it possible for practitioners
+to routinely train networks with over 100 layers.</p>
+<h2>Training Deep Networks</h2>
+<p>To motivate batch normalization, let us review
+a few practical challenges that arise
+when training machine learning models and neural networks in particular.</p>
+<p>First, choices regarding data preprocessing often make an enormous difference in the final results.
+Recall our application of MLPs to predicting house prices (we didn't do this in our exercises).
+Our first step when working with real data
+was to standardize our input features
+to each have a mean of zero and variance of one.
+Intuitively, this standardization plays nicely with our optimizers
+because it puts the parameters <em>a priori</em> at a similar scale.</p>
+<p>Second, for a typical MLP or CNN, as we train,
+the variables (e.g., affine transformation outputs in MLP)
+in intermediate layers 
+may take values with widely varying magnitudes:
+both along the layers from the input to the output, across units in the same layer,
+and over time due to our updates to the model parameters.
+The inventors of batch normalization postulated informally
+that this drift in the distribution of such variables could hamper the convergence of the network.
+Intuitively, we might conjecture that if one
+layer has variable values that are 100 times that of another layer,
+this might necessitate compensatory adjustments in the learning rates.</p>
+<p>Third, deeper networks are complex and easily capable of overfitting.
+This means that regularization becomes more critical.</p>
+<p>Batch normalization is applied to individual layers
+(optionally, to all of them) and works as follows:
+In each training iteration,
+we first normalize the inputs (of batch normalization)
+by subtracting their mean and
+dividing by their standard deviation,
+where both are estimated based on the statistics of the current minibatch.
+Next, we apply a scale coefficient and a scale offset.
+It is precisely due to this <em>normalization</em> based on <em>batch</em> statistics
+that <em>batch normalization</em> derives its name.</p>
+<p>Note that if we tried to apply batch normalization with minibatches of size 1,
+we would not be able to learn anything.
+That is because after subtracting the means,
+each hidden unit would take value 0!
+As you might guess, since we are devoting a whole section to batch normalization,
+with large enough minibatches, the approach proves effective and stable.
+One takeaway here is that when applying batch normalization,
+the choice of batch size may be
+even more significant than without batch normalization.</p>
+<p>Formally, denoting by $\mathbf{x} \in \mathcal{B}$ an input to batch normalization ($\mathrm{BN}$)
+that is from a minibatch $\mathcal{B}$,
+batch normalization transforms $\mathbf{x}$
+according to the following expression:</p>
+<p>$$\mathrm{BN}(\mathbf{x}) = \boldsymbol{\gamma} \odot \frac{\mathbf{x} - \hat{\boldsymbol{\mu}}<em>\mathcal{B}}{\hat{\boldsymbol{\sigma}}</em>\mathcal{B}} + \boldsymbol{\beta}.$$</p>
+<p>$\hat{\boldsymbol{\mu}}<em>\mathcal{B}$ is the  sample mean
+and $\hat{\boldsymbol{\sigma}}</em>\mathcal{B}$ is the sample standard deviation of the minibatch $\mathcal{B}$.
+After applying standardization,
+the resulting minibatch
+has zero mean and unit variance.
+Because the choice of unit variance
+(vs. some other magic number) is an arbitrary choice,
+we commonly include elementwise
+<em>scale parameter</em> $\boldsymbol{\gamma}$ and <em>shift parameter</em> $\boldsymbol{\beta}$
+that have the same shape as $\mathbf{x}$.
+Note that $\boldsymbol{\gamma}$ and $\boldsymbol{\beta}$ are
+ parameters that need to be learned jointly with the other model parameters.</p>
+<p>Consequently, the variable magnitudes
+for intermediate layers cannot diverge during training
+because batch normalization actively centers and rescales them back
+to a given mean and size (via $\hat{\boldsymbol{\mu}}<em>\mathcal{B}$ and ${\hat{\boldsymbol{\sigma}}</em>\mathcal{B}}$).
+One piece of practitioner's intuition or wisdom
+is that batch normalization seems to allow for more aggressive learning rates.</p>
+<p>Formally, 
+we calculate $\hat{\boldsymbol{\mu}}<em>\mathcal{B}$ and ${\hat{\boldsymbol{\sigma}}</em>\mathcal{B}}$ as follows:</p>
+<p>$$\begin{aligned} \hat{\boldsymbol{\mu}}<em>\mathcal{B} &amp;= \frac{1}{|\mathcal{B}|} \sum</em>{\mathbf{x} \in \mathcal{B}} \mathbf{x},\
+\hat{\boldsymbol{\sigma}}<em>\mathcal{B}^2 &amp;= \frac{1}{|\mathcal{B}|} \sum</em>{\mathbf{x} \in \mathcal{B}} (\mathbf{x} - \hat{\boldsymbol{\mu}}_{\mathcal{B}})^2 + \epsilon.\end{aligned}$$</p>
+<p>Note that we add a small constant $\epsilon &gt; 0$
+to the variance estimate
+to ensure that we never attempt division by zero,
+even in cases where the empirical variance estimate might vanish.
+The estimates $\hat{\boldsymbol{\mu}}<em>\mathcal{B}$ and ${\hat{\boldsymbol{\sigma}}</em>\mathcal{B}}$ counteract the scaling issue
+by using noisy estimates of mean and variance.
+You might think that this noisiness should be a problem.
+As it turns out, this is actually beneficial.</p>
+<p>This turns out to be a recurring theme in deep learning.
+For reasons that are not yet well-characterized theoretically,
+various sources of noise in optimization
+often lead to faster training and less overfitting:
+this variation appears to act as a form of regularization.
+In some preliminary research,
+<code>Teye.Azizpour.Smith.2018</code> and <code>Luo.Wang.Shao.ea.2018</code>
+relate the properties of batch normalization to Bayesian priors and penalties respectively.
+In particular, this sheds some light on the puzzle
+of why batch normalization works best for moderate minibatches sizes in the $50 \sim 100$ range.</p>
+<p>Fixing a trained model, you might think
+that we would prefer using the entire dataset
+to estimate the mean and variance.
+Once training is complete, why would we want
+the same image to be classified differently,
+depending on the batch in which it happens to reside?
+During training, such exact calculation is infeasible
+because the intermediate variables
+for all data examples
+change every time we update our model.
+However, once the model is trained,
+we can calculate the means and variances
+of each layer's variables based on the entire dataset.
+Indeed this is standard practice for
+models employing batch normalization
+and thus batch normalization layers function differently
+in <em>training mode</em> (normalizing by minibatch statistics)
+and in <em>prediction mode</em> (normalizing by dataset statistics).</p>
+<p>We are now ready to take a look at how batch normalization works in practice.</p>
+<h2>Batch Normalization Layers</h2>
+<p>Batch normalization implementations for fully-connected layers
+and convolutional layers are slightly different.
+We discuss both cases below.
+Recall that one key differences between batch normalization and other layers
+is that because batch normalization operates on a full minibatch at a time,
+we cannot just ignore the batch dimension
+as we did before when introducing other layers.</p>
+<h3>Fully-Connected Layers</h3>
+<p>When applying batch normalization to fully-connected layers,
+the original paper inserts batch normalization after the affine transformation
+and before the nonlinear activation function (later applications may insert batch normalization right after activation functions) <code>Ioffe.Szegedy.2015</code>.
+Denoting the input to the fully-connected layer by $\mathbf{x}$,
+the affine transformation
+by $\mathbf{W}\mathbf{x} + \mathbf{b}$ (with the weight parameter $\mathbf{W}$ and the bias parameter $\mathbf{b}$),
+and the activation function by $\phi$,
+we can express the computation of a batch-normalization-enabled,
+fully-connected layer output $\mathbf{h}$ as follows:</p>
+<p>$$\mathbf{h} = \phi(\mathrm{BN}(\mathbf{W}\mathbf{x} + \mathbf{b}) ).$$</p>
+<p>Recall that mean and variance are computed
+on the <em>same</em> minibatch 
+on which the transformation is applied.</p>
+<h3>Convolutional Layers</h3>
+<p>Similarly, with convolutional layers,
+we can apply batch normalization after the convolution
+and before the nonlinear activation function.
+When the convolution has multiple output channels,
+we need to carry out batch normalization
+for <em>each</em> of the outputs of these channels,
+and each channel has its own scale and shift parameters,
+both of which are scalars.
+Assume that our minibatches contain $m$ examples
+and that for each channel,
+the output of the convolution has height $p$ and width $q$.
+For convolutional layers, we carry out each batch normalization
+over the $m \cdot p \cdot q$ elements per output channel simultaneously.
+Thus, we collect the values over all spatial locations
+when computing the mean and variance
+and consequently 
+apply the same mean and variance
+within a given channel
+to normalize the value at each spatial location.</p>
+<h3>Batch Normalization During Prediction</h3>
+<p>As we mentioned earlier, batch normalization typically behaves differently
+in training mode and prediction mode.
+First, the noise in the sample mean and the sample variance
+arising from estimating each on minibatches
+are no longer desirable once we have trained the model.
+Second, we might not have the luxury
+of computing per-batch normalization statistics.
+For example,
+we might need to apply our model to make one prediction at a time.</p>
+<p>Typically, after training, we use the entire dataset
+to compute stable estimates of the variable statistics
+and then fix them at prediction time.
+Consequently, batch normalization behaves differently during training and at test time.
+Recall that dropout also exhibits this characteristic.</p>
+<h2><strong>Implementation from Scratch</strong></h2>
+<p>Below, we implement a batch normalization layer with tensors from scratch.</p>
+<div class="codehilite"><pre><span></span><code><span class="c1">#You only need the following line if you use google colab</span>
+
+<span class="err">!</span> <span class="n">pip</span> <span class="n">install</span> <span class="n">d2l</span>
+<span class="kn">import</span> <span class="nn">torch</span>
+<span class="kn">from</span> <span class="nn">torch</span> <span class="kn">import</span> <span class="n">nn</span>
+<span class="kn">from</span> <span class="nn">d2l</span> <span class="kn">import</span> <span class="n">torch</span> <span class="k">as</span> <span class="n">d2l</span>
+
+<span class="k">def</span> <span class="nf">batch_norm</span><span class="p">(</span><span class="n">X</span><span class="p">,</span> <span class="n">gamma</span><span class="p">,</span> <span class="n">beta</span><span class="p">,</span> <span class="n">moving_mean</span><span class="p">,</span> <span class="n">moving_var</span><span class="p">,</span> <span class="n">eps</span><span class="p">,</span> <span class="n">momentum</span><span class="p">):</span>
+    <span class="c1"># Use `is_grad_enabled` to determine whether the current mode is training</span>
+    <span class="c1"># mode or prediction mode</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">torch</span><span class="o">.</span><span class="n">is_grad_enabled</span><span class="p">():</span>
+        <span class="c1"># If it is prediction mode, directly use the mean and variance</span>
+        <span class="c1"># obtained by moving average</span>
+        <span class="n">X_hat</span> <span class="o">=</span> <span class="p">(</span><span class="n">X</span> <span class="o">-</span> <span class="n">moving_mean</span><span class="p">)</span> <span class="o">/</span> <span class="n">torch</span><span class="o">.</span><span class="n">sqrt</span><span class="p">(</span><span class="n">moving_var</span> <span class="o">+</span> <span class="n">eps</span><span class="p">)</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="k">assert</span> <span class="nb">len</span><span class="p">(</span><span class="n">X</span><span class="o">.</span><span class="n">shape</span><span class="p">)</span> <span class="ow">in</span> <span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="mi">4</span><span class="p">)</span>
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">X</span><span class="o">.</span><span class="n">shape</span><span class="p">)</span> <span class="o">==</span> <span class="mi">2</span><span class="p">:</span>
+            <span class="c1"># When using a fully-connected layer, calculate the mean and</span>
+            <span class="c1"># variance on the feature dimension</span>
+            <span class="n">mean</span> <span class="o">=</span> <span class="n">X</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">dim</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+            <span class="n">var</span> <span class="o">=</span> <span class="p">((</span><span class="n">X</span> <span class="o">-</span> <span class="n">mean</span><span class="p">)</span><span class="o">**</span><span class="mi">2</span><span class="p">)</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">dim</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="c1"># When using a two-dimensional convolutional layer, calculate the</span>
+            <span class="c1"># mean and variance on the channel dimension (axis=1). Here we</span>
+            <span class="c1"># need to maintain the shape of `X`, so that the broadcasting</span>
+            <span class="c1"># operation can be carried out later</span>
+            <span class="n">mean</span> <span class="o">=</span> <span class="n">X</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">dim</span><span class="o">=</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">3</span><span class="p">),</span> <span class="n">keepdim</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+            <span class="n">var</span> <span class="o">=</span> <span class="p">((</span><span class="n">X</span> <span class="o">-</span> <span class="n">mean</span><span class="p">)</span><span class="o">**</span><span class="mi">2</span><span class="p">)</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">dim</span><span class="o">=</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">3</span><span class="p">),</span> <span class="n">keepdim</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+        <span class="c1"># In training mode, the current mean and variance are used for the</span>
+        <span class="c1"># standardization</span>
+        <span class="n">X_hat</span> <span class="o">=</span> <span class="p">(</span><span class="n">X</span> <span class="o">-</span> <span class="n">mean</span><span class="p">)</span> <span class="o">/</span> <span class="n">torch</span><span class="o">.</span><span class="n">sqrt</span><span class="p">(</span><span class="n">var</span> <span class="o">+</span> <span class="n">eps</span><span class="p">)</span>
+        <span class="c1"># Update the mean and variance using moving average</span>
+        <span class="n">moving_mean</span> <span class="o">=</span> <span class="n">momentum</span> <span class="o">*</span> <span class="n">moving_mean</span> <span class="o">+</span> <span class="p">(</span><span class="mf">1.0</span> <span class="o">-</span> <span class="n">momentum</span><span class="p">)</span> <span class="o">*</span> <span class="n">mean</span>
+        <span class="n">moving_var</span> <span class="o">=</span> <span class="n">momentum</span> <span class="o">*</span> <span class="n">moving_var</span> <span class="o">+</span> <span class="p">(</span><span class="mf">1.0</span> <span class="o">-</span> <span class="n">momentum</span><span class="p">)</span> <span class="o">*</span> <span class="n">var</span>
+    <span class="n">Y</span> <span class="o">=</span> <span class="n">gamma</span> <span class="o">*</span> <span class="n">X_hat</span> <span class="o">+</span> <span class="n">beta</span>  <span class="c1"># Scale and shift</span>
+    <span class="k">return</span> <span class="n">Y</span><span class="p">,</span> <span class="n">moving_mean</span><span class="o">.</span><span class="n">data</span><span class="p">,</span> <span class="n">moving_var</span><span class="o">.</span><span class="n">data</span>
+</code></pre></div>
+
+<div class="codehilite"><pre><span></span><code><span class="n">Collecting</span><span class="w"> </span><span class="n">d2l</span>
+<span class="w">  </span><span class="n">Downloading</span><span class="w"> </span><span class="n">d2l</span><span class="o">-</span><span class="mf">0.17</span><span class="o">.</span><span class="mi">0</span><span class="o">-</span><span class="n">py3</span><span class="o">-</span><span class="n">none</span><span class="o">-</span><span class="n">any</span><span class="o">.</span><span class="n">whl</span><span class="w"> </span><span class="p">(</span><span class="mi">83</span><span class="w"> </span><span class="n">kB</span><span class="p">)</span>
+<span class="err"></span><span class="p">[</span><span class="err">?</span><span class="mi">25</span><span class="n">l</span>
+</code></pre></div>
+
+<p>[K     |████                            | 10 kB 24.0 MB/s eta 0:00:01
+[K     |███████▉                        | 20 kB 12.4 MB/s eta 0:00:01
+[K     |███████████▉                    | 30 kB 9.4 MB/s eta 0:00:01
+[K     |███████████████▊                | 40 kB 8.8 MB/s eta 0:00:01
+[K     |███████████████████▊            | 51 kB 5.0 MB/s eta 0:00:01
+[K     |███████████████████████▋        | 61 kB 5.5 MB/s eta 0:00:01
+[K     |███████████████████████████▋    | 71 kB 5.5 MB/s eta 0:00:01
+[K     |███████████████████████████████▌| 81 kB 6.2 MB/s eta 0:00:01
+[K     |████████████████████████████████| 83 kB 1.2 MB/s 
+    [?25hRequirement already satisfied: pandas in /usr/local/lib/python3.7/dist-packages (from d2l) (1.1.5)
+    Requirement already satisfied: requests in /usr/local/lib/python3.7/dist-packages (from d2l) (2.23.0)
+    Requirement already satisfied: jupyter in /usr/local/lib/python3.7/dist-packages (from d2l) (1.0.0)
+    Requirement already satisfied: matplotlib in /usr/local/lib/python3.7/dist-packages (from d2l) (3.2.2)
+    Requirement already satisfied: numpy in /usr/local/lib/python3.7/dist-packages (from d2l) (1.19.5)
+    Requirement already satisfied: ipykernel in /usr/local/lib/python3.7/dist-packages (from jupyter-&gt;d2l) (4.10.1)
+    Requirement already satisfied: jupyter-console in /usr/local/lib/python3.7/dist-packages (from jupyter-&gt;d2l) (5.2.0)
+    Requirement already satisfied: nbconvert in /usr/local/lib/python3.7/dist-packages (from jupyter-&gt;d2l) (5.6.1)
+    Requirement already satisfied: notebook in /usr/local/lib/python3.7/dist-packages (from jupyter-&gt;d2l) (5.3.1)
+    Requirement already satisfied: qtconsole in /usr/local/lib/python3.7/dist-packages (from jupyter-&gt;d2l) (5.2.0)
+    Requirement already satisfied: ipywidgets in /usr/local/lib/python3.7/dist-packages (from jupyter-&gt;d2l) (7.6.5)
+    Requirement already satisfied: ipython&gt;=4.0.0 in /usr/local/lib/python3.7/dist-packages (from ipykernel-&gt;jupyter-&gt;d2l) (5.5.0)
+    Requirement already satisfied: traitlets&gt;=4.1.0 in /usr/local/lib/python3.7/dist-packages (from ipykernel-&gt;jupyter-&gt;d2l) (5.1.1)
+    Requirement already satisfied: jupyter-client in /usr/local/lib/python3.7/dist-packages (from ipykernel-&gt;jupyter-&gt;d2l) (5.3.5)
+    Requirement already satisfied: tornado&gt;=4.0 in /usr/local/lib/python3.7/dist-packages (from ipykernel-&gt;jupyter-&gt;d2l) (5.1.1)
+    Requirement already satisfied: decorator in /usr/local/lib/python3.7/dist-packages (from ipython&gt;=4.0.0-&gt;ipykernel-&gt;jupyter-&gt;d2l) (4.4.2)
+    Requirement already satisfied: pexpect in /usr/local/lib/python3.7/dist-packages (from ipython&gt;=4.0.0-&gt;ipykernel-&gt;jupyter-&gt;d2l) (4.8.0)
+    Requirement already satisfied: setuptools&gt;=18.5 in /usr/local/lib/python3.7/dist-packages (from ipython&gt;=4.0.0-&gt;ipykernel-&gt;jupyter-&gt;d2l) (57.4.0)
+    Requirement already satisfied: pygments in /usr/local/lib/python3.7/dist-packages (from ipython&gt;=4.0.0-&gt;ipykernel-&gt;jupyter-&gt;d2l) (2.6.1)
+    Requirement already satisfied: simplegeneric&gt;0.8 in /usr/local/lib/python3.7/dist-packages (from ipython&gt;=4.0.0-&gt;ipykernel-&gt;jupyter-&gt;d2l) (0.8.1)
+    Requirement already satisfied: pickleshare in /usr/local/lib/python3.7/dist-packages (from ipython&gt;=4.0.0-&gt;ipykernel-&gt;jupyter-&gt;d2l) (0.7.5)
+    Requirement already satisfied: prompt-toolkit&lt;2.0.0,&gt;=1.0.4 in /usr/local/lib/python3.7/dist-packages (from ipython&gt;=4.0.0-&gt;ipykernel-&gt;jupyter-&gt;d2l) (1.0.18)
+    Requirement already satisfied: wcwidth in /usr/local/lib/python3.7/dist-packages (from prompt-toolkit&lt;2.0.0,&gt;=1.0.4-&gt;ipython&gt;=4.0.0-&gt;ipykernel-&gt;jupyter-&gt;d2l) (0.2.5)
+    Requirement already satisfied: six&gt;=1.9.0 in /usr/local/lib/python3.7/dist-packages (from prompt-toolkit&lt;2.0.0,&gt;=1.0.4-&gt;ipython&gt;=4.0.0-&gt;ipykernel-&gt;jupyter-&gt;d2l) (1.15.0)
+    Requirement already satisfied: ipython-genutils~=0.2.0 in /usr/local/lib/python3.7/dist-packages (from ipywidgets-&gt;jupyter-&gt;d2l) (0.2.0)
+    Requirement already satisfied: jupyterlab-widgets&gt;=1.0.0 in /usr/local/lib/python3.7/dist-packages (from ipywidgets-&gt;jupyter-&gt;d2l) (1.0.2)
+    Requirement already satisfied: widgetsnbextension~=3.5.0 in /usr/local/lib/python3.7/dist-packages (from ipywidgets-&gt;jupyter-&gt;d2l) (3.5.2)
+    Requirement already satisfied: nbformat&gt;=4.2.0 in /usr/local/lib/python3.7/dist-packages (from ipywidgets-&gt;jupyter-&gt;d2l) (5.1.3)
+    Requirement already satisfied: jsonschema!=2.5.0,&gt;=2.4 in /usr/local/lib/python3.7/dist-packages (from nbformat&gt;=4.2.0-&gt;ipywidgets-&gt;jupyter-&gt;d2l) (2.6.0)
+    Requirement already satisfied: jupyter-core in /usr/local/lib/python3.7/dist-packages (from nbformat&gt;=4.2.0-&gt;ipywidgets-&gt;jupyter-&gt;d2l) (4.9.1)
+    Requirement already satisfied: Send2Trash in /usr/local/lib/python3.7/dist-packages (from notebook-&gt;jupyter-&gt;d2l) (1.8.0)
+    Requirement already satisfied: jinja2 in /usr/local/lib/python3.7/dist-packages (from notebook-&gt;jupyter-&gt;d2l) (2.11.3)
+    Requirement already satisfied: terminado&gt;=0.8.1 in /usr/local/lib/python3.7/dist-packages (from notebook-&gt;jupyter-&gt;d2l) (0.12.1)
+    Requirement already satisfied: python-dateutil&gt;=2.1 in /usr/local/lib/python3.7/dist-packages (from jupyter-client-&gt;ipykernel-&gt;jupyter-&gt;d2l) (2.8.2)
+    Requirement already satisfied: pyzmq&gt;=13 in /usr/local/lib/python3.7/dist-packages (from jupyter-client-&gt;ipykernel-&gt;jupyter-&gt;d2l) (22.3.0)
+    Requirement already satisfied: ptyprocess in /usr/local/lib/python3.7/dist-packages (from terminado&gt;=0.8.1-&gt;notebook-&gt;jupyter-&gt;d2l) (0.7.0)
+    Requirement already satisfied: MarkupSafe&gt;=0.23 in /usr/local/lib/python3.7/dist-packages (from jinja2-&gt;notebook-&gt;jupyter-&gt;d2l) (2.0.1)
+    Requirement already satisfied: kiwisolver&gt;=1.0.1 in /usr/local/lib/python3.7/dist-packages (from matplotlib-&gt;d2l) (1.3.2)
+    Requirement already satisfied: pyparsing!=2.0.4,!=2.1.2,!=2.1.6,&gt;=2.0.1 in /usr/local/lib/python3.7/dist-packages (from matplotlib-&gt;d2l) (2.4.7)
+    Requirement already satisfied: cycler&gt;=0.10 in /usr/local/lib/python3.7/dist-packages (from matplotlib-&gt;d2l) (0.11.0)
+    Requirement already satisfied: bleach in /usr/local/lib/python3.7/dist-packages (from nbconvert-&gt;jupyter-&gt;d2l) (4.1.0)
+    Requirement already satisfied: testpath in /usr/local/lib/python3.7/dist-packages (from nbconvert-&gt;jupyter-&gt;d2l) (0.5.0)
+    Requirement already satisfied: mistune&lt;2,&gt;=0.8.1 in /usr/local/lib/python3.7/dist-packages (from nbconvert-&gt;jupyter-&gt;d2l) (0.8.4)
+    Requirement already satisfied: defusedxml in /usr/local/lib/python3.7/dist-packages (from nbconvert-&gt;jupyter-&gt;d2l) (0.7.1)
+    Requirement already satisfied: entrypoints&gt;=0.2.2 in /usr/local/lib/python3.7/dist-packages (from nbconvert-&gt;jupyter-&gt;d2l) (0.3)
+    Requirement already satisfied: pandocfilters&gt;=1.4.1 in /usr/local/lib/python3.7/dist-packages (from nbconvert-&gt;jupyter-&gt;d2l) (1.5.0)
+    Requirement already satisfied: webencodings in /usr/local/lib/python3.7/dist-packages (from bleach-&gt;nbconvert-&gt;jupyter-&gt;d2l) (0.5.1)
+    Requirement already satisfied: packaging in /usr/local/lib/python3.7/dist-packages (from bleach-&gt;nbconvert-&gt;jupyter-&gt;d2l) (21.2)
+    Requirement already satisfied: pytz&gt;=2017.2 in /usr/local/lib/python3.7/dist-packages (from pandas-&gt;d2l) (2018.9)
+    Requirement already satisfied: qtpy in /usr/local/lib/python3.7/dist-packages (from qtconsole-&gt;jupyter-&gt;d2l) (1.11.2)
+    Requirement already satisfied: chardet&lt;4,&gt;=3.0.2 in /usr/local/lib/python3.7/dist-packages (from requests-&gt;d2l) (3.0.4)
+    Requirement already satisfied: urllib3!=1.25.0,!=1.25.1,&lt;1.26,&gt;=1.21.1 in /usr/local/lib/python3.7/dist-packages (from requests-&gt;d2l) (1.24.3)
+    Requirement already satisfied: idna&lt;3,&gt;=2.5 in /usr/local/lib/python3.7/dist-packages (from requests-&gt;d2l) (2.10)
+    Requirement already satisfied: certifi&gt;=2017.4.17 in /usr/local/lib/python3.7/dist-packages (from requests-&gt;d2l) (2021.10.8)
+    Installing collected packages: d2l
+    Successfully installed d2l-0.17.0</p>
+<p>We can now <strong>create a proper <code>BatchNorm</code> layer.</strong>
+Our layer will maintain proper parameters
+for scale <code>gamma</code> and shift <code>beta</code>,
+both of which will be updated in the course of training.
+Additionally, our layer will maintain
+moving averages of the means and variances
+for subsequent use during model prediction.</p>
+<p>Putting aside the algorithmic details,
+note the design pattern underlying our implementation of the layer.
+Typically, we define the mathematics in a separate function, say <code>batch_norm</code>.
+We then integrate this functionality into a custom layer,
+whose code mostly addresses bookkeeping matters,
+such as moving data to the right device context,
+allocating and initializing any required variables,
+keeping track of moving averages (here for mean and variance), and so on.
+This pattern enables a clean separation of mathematics from boilerplate code.
+Also note that for the sake of convenience
+we did not worry about automatically inferring the input shape here,
+thus we need to specify the number of features throughout.
+Do not worry, the high-level batch normalization APIs in the deep learning framework will care of this for us and we will demonstrate that later.</p>
+<div class="codehilite"><pre><span></span><code><span class="k">class</span> <span class="nc">BatchNorm</span><span class="p">(</span><span class="n">nn</span><span class="o">.</span><span class="n">Module</span><span class="p">):</span>
+    <span class="c1"># `num_features`: the number of outputs for a fully-connected layer</span>
+    <span class="c1"># or the number of output channels for a convolutional layer. `num_dims`:</span>
+    <span class="c1"># 2 for a fully-connected layer and 4 for a convolutional layer</span>
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">num_features</span><span class="p">,</span> <span class="n">num_dims</span><span class="p">):</span>
+        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">()</span>
+        <span class="k">if</span> <span class="n">num_dims</span> <span class="o">==</span> <span class="mi">2</span><span class="p">:</span>
+            <span class="n">shape</span> <span class="o">=</span> <span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="n">num_features</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">shape</span> <span class="o">=</span> <span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="n">num_features</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+        <span class="c1"># The scale parameter and the shift parameter (model parameters) are</span>
+        <span class="c1"># initialized to 1 and 0, respectively</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">gamma</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">Parameter</span><span class="p">(</span><span class="n">torch</span><span class="o">.</span><span class="n">ones</span><span class="p">(</span><span class="n">shape</span><span class="p">))</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">beta</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">Parameter</span><span class="p">(</span><span class="n">torch</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="n">shape</span><span class="p">))</span>
+        <span class="c1"># The variables that are not model parameters are initialized to 0 and 1</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">moving_mean</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="n">shape</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">moving_var</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">ones</span><span class="p">(</span><span class="n">shape</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">forward</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">X</span><span class="p">):</span>
+        <span class="c1"># If `X` is not on the main memory, copy `moving_mean` and</span>
+        <span class="c1"># `moving_var` to the device where `X` is located</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">moving_mean</span><span class="o">.</span><span class="n">device</span> <span class="o">!=</span> <span class="n">X</span><span class="o">.</span><span class="n">device</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">moving_mean</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">moving_mean</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="n">X</span><span class="o">.</span><span class="n">device</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">moving_var</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">moving_var</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="n">X</span><span class="o">.</span><span class="n">device</span><span class="p">)</span>
+        <span class="c1"># Save the updated `moving_mean` and `moving_var`</span>
+        <span class="n">Y</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">moving_mean</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">moving_var</span> <span class="o">=</span> <span class="n">batch_norm</span><span class="p">(</span>
+            <span class="n">X</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">gamma</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">beta</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">moving_mean</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">moving_var</span><span class="p">,</span>
+            <span class="n">eps</span><span class="o">=</span><span class="mf">1e-5</span><span class="p">,</span> <span class="n">momentum</span><span class="o">=</span><span class="mf">0.9</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">Y</span>
+</code></pre></div>
+
+<h2><strong>Applying Batch Normalization in LeNet</strong></h2>
+<p>To see how to apply <code>BatchNorm</code> in context,
+below we apply it to a traditional LeNet model.
+Recall that batch normalization is applied
+after the convolutional layers or fully-connected layers
+but before the corresponding activation functions.</p>
+<div class="codehilite"><pre><span></span><code><span class="n">net</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">Sequential</span><span class="p">(</span><span class="n">nn</span><span class="o">.</span><span class="n">Conv2d</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">6</span><span class="p">,</span> <span class="n">kernel_size</span><span class="o">=</span><span class="mi">5</span><span class="p">),</span> <span class="n">BatchNorm</span><span class="p">(</span><span class="mi">6</span><span class="p">,</span> <span class="n">num_dims</span><span class="o">=</span><span class="mi">4</span><span class="p">),</span>
+                    <span class="n">nn</span><span class="o">.</span><span class="n">Sigmoid</span><span class="p">(),</span> <span class="n">nn</span><span class="o">.</span><span class="n">AvgPool2d</span><span class="p">(</span><span class="n">kernel_size</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">stride</span><span class="o">=</span><span class="mi">2</span><span class="p">),</span>
+                    <span class="n">nn</span><span class="o">.</span><span class="n">Conv2d</span><span class="p">(</span><span class="mi">6</span><span class="p">,</span> <span class="mi">16</span><span class="p">,</span>
+                              <span class="n">kernel_size</span><span class="o">=</span><span class="mi">5</span><span class="p">),</span> <span class="n">BatchNorm</span><span class="p">(</span><span class="mi">16</span><span class="p">,</span> <span class="n">num_dims</span><span class="o">=</span><span class="mi">4</span><span class="p">),</span>
+                    <span class="n">nn</span><span class="o">.</span><span class="n">Sigmoid</span><span class="p">(),</span> <span class="n">nn</span><span class="o">.</span><span class="n">AvgPool2d</span><span class="p">(</span><span class="n">kernel_size</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">stride</span><span class="o">=</span><span class="mi">2</span><span class="p">),</span>
+                    <span class="n">nn</span><span class="o">.</span><span class="n">Flatten</span><span class="p">(),</span> <span class="n">nn</span><span class="o">.</span><span class="n">Linear</span><span class="p">(</span><span class="mi">16</span> <span class="o">*</span> <span class="mi">4</span> <span class="o">*</span> <span class="mi">4</span><span class="p">,</span> <span class="mi">120</span><span class="p">),</span>
+                    <span class="n">BatchNorm</span><span class="p">(</span><span class="mi">120</span><span class="p">,</span> <span class="n">num_dims</span><span class="o">=</span><span class="mi">2</span><span class="p">),</span> <span class="n">nn</span><span class="o">.</span><span class="n">Sigmoid</span><span class="p">(),</span>
+                    <span class="n">nn</span><span class="o">.</span><span class="n">Linear</span><span class="p">(</span><span class="mi">120</span><span class="p">,</span> <span class="mi">84</span><span class="p">),</span> <span class="n">BatchNorm</span><span class="p">(</span><span class="mi">84</span><span class="p">,</span> <span class="n">num_dims</span><span class="o">=</span><span class="mi">2</span><span class="p">),</span>
+                    <span class="n">nn</span><span class="o">.</span><span class="n">Sigmoid</span><span class="p">(),</span> <span class="n">nn</span><span class="o">.</span><span class="n">Linear</span><span class="p">(</span><span class="mi">84</span><span class="p">,</span> <span class="mi">10</span><span class="p">))</span>
+</code></pre></div>
+
+<p>As before, we will <strong>train our network on the Fashion-MNIST dataset</strong>.
+This code is virtually identical to that when we first trained LeNet.
+The main difference is the larger learning rate.</p>
+<div class="codehilite"><pre><span></span><code><span class="n">lr</span><span class="p">,</span> <span class="n">num_epochs</span><span class="p">,</span> <span class="n">batch_size</span> <span class="o">=</span> <span class="mf">1.0</span><span class="p">,</span> <span class="mi">10</span><span class="p">,</span> <span class="mi">256</span>
+<span class="n">train_iter</span><span class="p">,</span> <span class="n">test_iter</span> <span class="o">=</span> <span class="n">d2l</span><span class="o">.</span><span class="n">load_data_fashion_mnist</span><span class="p">(</span><span class="n">batch_size</span><span class="p">)</span>
+<span class="n">d2l</span><span class="o">.</span><span class="n">train_ch6</span><span class="p">(</span><span class="n">net</span><span class="p">,</span> <span class="n">train_iter</span><span class="p">,</span> <span class="n">test_iter</span><span class="p">,</span> <span class="n">num_epochs</span><span class="p">,</span> <span class="n">lr</span><span class="p">,</span> <span class="n">d2l</span><span class="o">.</span><span class="n">try_gpu</span><span class="p">())</span>
+</code></pre></div>
+
+<div class="codehilite"><pre><span></span><code>loss 0.266, train acc 0.901, test acc 0.856
+2817.7 examples/sec on cpu
+</code></pre></div>
+
+<p><img alt="svg" src="output_7_1.svg" /></p>
+<p>Let us <strong>have a look at the scale parameter <code>gamma</code>
+and the shift parameter <code>beta</code></strong> learned
+from the first batch normalization layer.</p>
+<div class="codehilite"><pre><span></span><code><span class="n">net</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">gamma</span><span class="o">.</span><span class="n">reshape</span><span class="p">((</span><span class="o">-</span><span class="mi">1</span><span class="p">,)),</span> <span class="n">net</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">beta</span><span class="o">.</span><span class="n">reshape</span><span class="p">((</span><span class="o">-</span><span class="mi">1</span><span class="p">,))</span>
+</code></pre></div>
+
+<div class="codehilite"><pre><span></span><code>(tensor([3.1806, 2.3716, 0.2824, 2.8187, 4.5684, 3.0457],
+        grad_fn=&lt;ReshapeAliasBackward0&gt;),
+ tensor([-2.4734,  1.6034, -0.3129,  3.0968, -2.6180, -0.8853],
+        grad_fn=&lt;ReshapeAliasBackward0&gt;))
+</code></pre></div>
+
+<h2><strong>Concise Implementation</strong></h2>
+<p>Compared with the <code>BatchNorm</code> class,
+which we just defined ourselves,
+we can use the <code>BatchNorm</code> class defined in high-level APIs from the deep learning framework directly.
+The code looks virtually identical
+to our implementation above.</p>
+<div class="codehilite"><pre><span></span><code><span class="n">net</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">Sequential</span><span class="p">(</span><span class="n">nn</span><span class="o">.</span><span class="n">Conv2d</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">6</span><span class="p">,</span> <span class="n">kernel_size</span><span class="o">=</span><span class="mi">5</span><span class="p">),</span> <span class="n">nn</span><span class="o">.</span><span class="n">BatchNorm2d</span><span class="p">(</span><span class="mi">6</span><span class="p">),</span>
+                    <span class="n">nn</span><span class="o">.</span><span class="n">Sigmoid</span><span class="p">(),</span> <span class="n">nn</span><span class="o">.</span><span class="n">AvgPool2d</span><span class="p">(</span><span class="n">kernel_size</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">stride</span><span class="o">=</span><span class="mi">2</span><span class="p">),</span>
+                    <span class="n">nn</span><span class="o">.</span><span class="n">Conv2d</span><span class="p">(</span><span class="mi">6</span><span class="p">,</span> <span class="mi">16</span><span class="p">,</span> <span class="n">kernel_size</span><span class="o">=</span><span class="mi">5</span><span class="p">),</span> <span class="n">nn</span><span class="o">.</span><span class="n">BatchNorm2d</span><span class="p">(</span><span class="mi">16</span><span class="p">),</span>
+                    <span class="n">nn</span><span class="o">.</span><span class="n">Sigmoid</span><span class="p">(),</span> <span class="n">nn</span><span class="o">.</span><span class="n">AvgPool2d</span><span class="p">(</span><span class="n">kernel_size</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">stride</span><span class="o">=</span><span class="mi">2</span><span class="p">),</span>
+                    <span class="n">nn</span><span class="o">.</span><span class="n">Flatten</span><span class="p">(),</span> <span class="n">nn</span><span class="o">.</span><span class="n">Linear</span><span class="p">(</span><span class="mi">256</span><span class="p">,</span> <span class="mi">120</span><span class="p">),</span> <span class="n">nn</span><span class="o">.</span><span class="n">BatchNorm1d</span><span class="p">(</span><span class="mi">120</span><span class="p">),</span>
+                    <span class="n">nn</span><span class="o">.</span><span class="n">Sigmoid</span><span class="p">(),</span> <span class="n">nn</span><span class="o">.</span><span class="n">Linear</span><span class="p">(</span><span class="mi">120</span><span class="p">,</span> <span class="mi">84</span><span class="p">),</span> <span class="n">nn</span><span class="o">.</span><span class="n">BatchNorm1d</span><span class="p">(</span><span class="mi">84</span><span class="p">),</span>
+                    <span class="n">nn</span><span class="o">.</span><span class="n">Sigmoid</span><span class="p">(),</span> <span class="n">nn</span><span class="o">.</span><span class="n">Linear</span><span class="p">(</span><span class="mi">84</span><span class="p">,</span> <span class="mi">10</span><span class="p">))</span>
+</code></pre></div>
+
+<p>Below, we <strong>use the same hyperparameters to train our model.</strong>
+Note that as usual, the high-level API variant runs much faster
+because its code has been compiled to C++ or CUDA
+while our custom implementation must be interpreted by Python.</p>
+<div class="codehilite"><pre><span></span><code><span class="n">d2l</span><span class="o">.</span><span class="n">train_ch6</span><span class="p">(</span><span class="n">net</span><span class="p">,</span> <span class="n">train_iter</span><span class="p">,</span> <span class="n">test_iter</span><span class="p">,</span> <span class="n">num_epochs</span><span class="p">,</span> <span class="n">lr</span><span class="p">,</span> <span class="n">d2l</span><span class="o">.</span><span class="n">try_gpu</span><span class="p">())</span>
+</code></pre></div>
+
+<div class="codehilite"><pre><span></span><code>loss 0.266, train acc 0.901, test acc 0.863
+3916.8 examples/sec on cpu
+</code></pre></div>
+
+<p><img alt="svg" src="output_13_1.svg" /></p>
+<h2>Controversy</h2>
+<p>Intuitively, batch normalization is thought
+to make the optimization landscape smoother.
+However, we must be careful to distinguish between
+speculative intuitions and true explanations
+for the phenomena that we observe when training deep models.
+Recall that we do not even know why simpler
+deep neural networks (MLPs and conventional CNNs)
+generalize well in the first place.
+Even with dropout and weight decay,
+they remain so flexible that their ability to generalize to unseen data
+cannot be explained via conventional learning-theoretic generalization guarantees.</p>
+<p>In the original paper proposing batch normalization,
+the authors, in addition to introducing a powerful and useful tool,
+offered an explanation for why it works:
+by reducing <em>internal covariate shift</em>.
+Presumably by <em>internal covariate shift</em> the authors
+meant something like the intuition expressed above---the
+notion that the distribution of variable values changes
+over the course of training.
+However, there were two problems with this explanation:
+i) This drift is very different from <em>covariate shift</em>,
+rendering the name a misnomer.
+ii) The explanation offers an under-specified intuition
+but leaves the question of <em>why precisely this technique works</em>
+an open question wanting for a rigorous explanation.
+Throughout this book, we aim to convey the intuitions that practitioners
+use to guide their development of deep neural networks.
+However, we believe that it is important
+to separate these guiding intuitions
+from established scientific fact.
+Eventually, when you master this material
+and start writing your own research papers
+you will want to be clear to delineate
+between technical claims and hunches.</p>
+<p>Following the success of batch normalization,
+its explanation in terms of <em>internal covariate shift</em>
+has repeatedly surfaced in debates in the technical literature
+and broader discourse about how to present machine learning research.
+In a memorable speech given while accepting a Test of Time Award
+at the 2017 NeurIPS conference,
+Ali Rahimi used <em>internal covariate shift</em>
+as a focal point in an argument likening
+the modern practice of deep learning to alchemy.
+Subsequently, the example was revisited in detail
+in a position paper outlining
+troubling trends in machine learning <code>Lipton.Steinhardt.2018</code>.
+Other authors
+have proposed alternative explanations for the success of batch normalization,
+some claiming that batch normalization's success comes despite exhibiting behavior
+that is in some ways opposite to those claimed in the original paper <code>Santurkar.Tsipras.Ilyas.ea.2018</code>.</p>
+<p>We note that the <em>internal covariate shift</em>
+is no more worthy of criticism than any of
+thousands of similarly vague claims
+made every year in the technical machine learning literature.
+Likely, its resonance as a focal point of these debates
+owes to its broad recognizability to the target audience.
+Batch normalization has proven an indispensable method,
+applied in nearly all deployed image classifiers,
+earning the paper that introduced the technique
+tens of thousands of citations.</p>
+<h2>Summary</h2>
+<ul>
+<li>During model training, batch normalization continuously adjusts the intermediate output of the neural network by utilizing the mean and standard deviation of the minibatch, so that the values of the intermediate output in each layer throughout the neural network are more stable.</li>
+<li>The batch normalization methods for fully-connected layers and convolutional layers are slightly different.</li>
+<li>Like a dropout layer, batch normalization layers have different computation results in training mode and prediction mode.</li>
+<li>Batch normalization has many beneficial side effects, primarily that of regularization. On the other hand, the original motivation of reducing internal covariate shift seems not to be a valid explanation.</li>
+</ul>
+<h2>Exercises</h2>
+<ol>
+<li>
+<p>Can we remove the bias parameter from the fully-connected layer or the convolutional layer before the batch normalization? Why?</p>
+</li>
+<li>
+<p>Do we need batch normalization in every layer? Experiment with it?</p>
+</li>
+<li>
+<p>Is it possible to use dropout and batch normalization?</p>
+</li>
+</ol>
+<p><a href="https://discuss.d2l.ai/t/84">Discussions</a></p>
+</body>
+</html>
