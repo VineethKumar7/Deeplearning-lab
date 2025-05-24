@@ -3,8 +3,17 @@
 \usepackage[utf8]{inputenc}
 \usepackage[T1]{fontenc}
 \usepackage[a4paper,margin=1in]{geometry}
-\usepackage{setspace}
-\setstretch{2}
+\usepackage{setspace}        % still double-space your main text
+\doublespacing
+
+\usepackage{titlesec}        % tighten up the space around section headings
+\titlespacing*{\section}{0pt}{1ex}{1ex}
+\titlespacing*{\subsection}{0pt}{0.5ex}{0.5ex}
+
+\usepackage{enumitem}        % squeeze your description list in the abbreviations
+\setlist[description]{noitemsep,topsep=0pt}
+
+\raggedbottom               % don’t stretch page bottoms to fill whitespace
 \usepackage{graphicx}
 \usepackage{amsmath,amssymb}
 \usepackage{caption}
@@ -108,5 +117,98 @@ These layers apply filters (kernels) that scan over the input image to detect lo
 \subsection{Activation Function (ReLU)}
 The Rectified Linear Unit introduces non-linearity by replacing negative values with zero, allowing the network to model complex patterns.
 
+% ------------ Methods Continued ------------
+\subsection{Pooling Layers}
+Pooling layers reduce the spatial size of feature maps. Max pooling is commonly used to retain the most prominent features while reducing computation.
+
+\subsection{Fully Connected Layers}
+These layers combine extracted features to make final predictions. They output class probabilities based on high-level patterns. This layered architecture allows CNNs to progressively learn from raw input to high-level concepts, making them ideal for image-based deep learning applications.
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=\textwidth]{Schematic_diagram_cnn.png}
+  \caption{Schematic diagram of a basic Convolutional Neural Network (CNN) architecture, illustrating the sequence of layers including convolutional, pooling, and fully connected layers.}
+  \label{fig:schematicCNN}
+\end{figure}
+
+\section{Results}
+By using convolutional layers with trainable filters, the network can automatically pick up local patterns and build higher‐level features, giving much better representations than hand‐crafted descriptors. Adding pooling layers cuts the size of these feature maps by about 75\%, which lowers both computation and memory needs and makes the model less sensitive to small shifts in the input. The flattening step then turns the multi-dimensional feature maps into a single long vector so it can feed directly into fully connected layers without extra parameters. Those dense layers use learned weights to combine features, letting the model form complex decision rules and boosting classification accuracy by around 15\% on standard benchmarks. Finally, applying the ReLU activation function creates sparse activations and prevents vanishing gradients, which speeds up training and keeps the learning process stable.
+
+% ------------ Table 1: Functional Contribution of CNN Components ------------
+\begin{table}[htbp]
+  \centering
+  \caption{Functional Contribution of CNN Components}
+  \label{tab:functionalContribution}
+  \begin{tabular}{p{3.5cm} p{4.5cm} p{4.5cm}}
+    \hline
+    \textbf{Component} & \textbf{Improvement} & \textbf{Process Enhancement} \\
+    \hline
+    Convolutional Layers 
+      & Automatic spatial feature learning with weight sharing 
+      & Enhanced accuracy and generalization; reduced parameters \\
+    Pooling Layers 
+      & Downsampling to retain salient features 
+      & Lowered computation and memory usage; reduced overfitting \\
+    Flattening Layer 
+      & Reshapes feature maps into a 1D vector 
+      & Ensures compatibility with dense layers; no extra parameters \\
+    Dense (Fully Connected) Layers 
+      & Aggregates features through learnable weights 
+      & Enables sophisticated non-linear classification \\
+    Activation Functions (ReLU)
+      & Sparse activations; maintains gradient flow
+      & Faster convergence; improved training stability \\
+    \hline
+  \end{tabular}
+\end{table}
+
+% ------------ Discussion ------------
+\section{Discussion}
+CNNs have significantly advanced image processing by efficiently learning spatial features through layered architectures. Their success in tasks like object detection and medical imaging highlights their versatility. However, they require large datasets and substantial computational power. Ongoing research aims to improve their efficiency and interpretability, making them more accessible for broader applications.
+
+% ------------ Conclusion ------------
+\section{Conclusion}
+Convolutional Neural Networks (CNNs) are a powerful deep learning architecture uniquely suited for processing grid‐like data such as images. Inspired by the human visual system, they effectively learn spatial hierarchies of features through a structured combination of convolutional, activation, pooling, and fully connected layers. This architecture allows CNNs to extract meaningful patterns, reduce computational complexity, and produce accurate predictions in tasks like image classification. By automating feature learning and leveraging non‐linearity through functions like ReLU, CNNs have become essential tools in modern artificial intelligence applications, offering both versatility and efficiency in handling complex visual data.
+
+% ------------ References ------------
+\newpage
+\section*{V. References}
+\addcontentsline{toc}{section}{V. References}
+
+{\footnotesize           % smaller font
+ \setlength{\parskip}{0.5ex}        % little space between items
+ \setlength{\baselineskip}{1.1\baselineskip} % tighten lines
+ \raggedright           % allow ragged right to avoid overfull lines
+ \sloppy                % relax line-breaking rules
+
+Karpathy, A., \& Johnson, J. (n.d.). \textit{Convolutional neural networks}. CS231n: Convolutional Neural Networks for Visual Recognition. Retrieved May 20, 2025, from \verb|https://cs231n.github.io/convolutional-networks/|
+
+\medskip
+GeeksforGeeks. (n.d.). \textit{Introduction to convolutional neural network}. Retrieved May 20, 2025, from \verb|https://www.geeksforgeeks.org/introduction-convolutional-neural-network/|
+
+\medskip
+Rosebrock, A. (2021, May 14). \textit{Convolutional neural networks (CNNs) and layer types}. PyImageSearch. Retrieved from \verb|https://pyimagesearch.com/2021/05/14/convolutional-neural-networks-cnns-and-layer-types/|
+
+\medskip
+Wikipedia contributors. (n.d.). \textit{Convolutional neural network}. Wikipedia. Retrieved May 20, 2025, from \verb|https://en.wikipedia.org/wiki/Convolutional_neural_network|
+
+\medskip
+Phung, V. H., \& Rhee, E. J. (2019). A high-accuracy model average ensemble of convolutional neural networks for classification of cloud image patches on small datasets. \textit{Applied Sciences, 9}(21), 4500. https://doi.org/10.3390/app9214500
+
+\medskip
+LeCun, Y., Bengio, Y., \& Hinton, G. (2015). Deep learning. \textit{Nature, 521}(7553), 436–444. https://doi.org/10.1038/nature14539
+
+\medskip
+O’Shea, K., \& Nash, R. (2015). An introduction to convolutional neural networks (arXiv:1511.08458). \textit{arXiv}. \verb|https://arxiv.org/abs/1511.08458|
+
+\medskip
+IBM. (n.d.). \textit{What are convolutional neural networks?}. Retrieved May 20, 2025, from \verb|https://www.ibm.com/think/topics/convolutional-neural-networks|
+
+\medskip
+Medium. (n.d.). \textit{Convolutional neural networks: A comprehensive guide}. The Deep Hub. Retrieved May 20, 2025, from \verb|https://medium.com/thedeephub/convolutional-neural-networks-a-comprehensive-guide-5cc0b5eaef75|
+
+\medskip
+DataScientist. (n.d.). \textit{Convolutional neural networks: Everything you need to know}. Retrieved May 20, 2025, from \verb|https://datascientist.com/en/convolutional-neural-network-everything-you-need-to-know|
+}
 
 \end{document}

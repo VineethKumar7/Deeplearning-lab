@@ -3,5 +3,11 @@
 \contentsline {section}{IV. List of Abbreviations}{5}{}%
 \contentsline {section}{\numberline {1}Introduction}{6}{}%
 \contentsline {section}{\numberline {2}Methods/Approach}{6}{}%
-\contentsline {subsection}{\numberline {2.1}Convolutional Layers}{7}{}%
-\contentsline {subsection}{\numberline {2.2}Activation Function (ReLU)}{7}{}%
+\contentsline {subsection}{\numberline {2.1}Convolutional Layers}{6}{}%
+\contentsline {subsection}{\numberline {2.2}Activation Function (ReLU)}{6}{}%
+\contentsline {subsection}{\numberline {2.3}Pooling Layers}{7}{}%
+\contentsline {subsection}{\numberline {2.4}Fully Connected Layers}{7}{}%
+\contentsline {section}{\numberline {3}Results}{7}{}%
+\contentsline {section}{\numberline {4}Discussion}{8}{}%
+\contentsline {section}{\numberline {5}Conclusion}{8}{}%
+\contentsline {section}{V. References}{10}{}%
