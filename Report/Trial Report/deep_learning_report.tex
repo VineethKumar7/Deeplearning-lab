@@ -1,0 +1,112 @@
+% Preamble for Deep Learning Report
+\documentclass[12pt]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[a4paper,margin=1in]{geometry}
+\usepackage{setspace}
+\setstretch{2}
+\usepackage{graphicx}
+\usepackage{amsmath,amssymb}
+\usepackage{caption}
+\usepackage{cite}
+
+% Title page settings
+\title{Research Internship Deep Learning: Scientific Test\\[1em]
+{\large \textbf{Convolutional Neural Networks}}}
+\author{}
+\date{}
+
+\begin{document}
+
+% --------- PAGE 1 ---------
+\begin{titlepage}
+  \centering
+  \vspace*{2cm}
+  {\LARGE \textbf{Research Internship Deep Learning:}\\[0.5em]
+  \Large \textit{Scientific Test}}\\[2em]
+  {\Large \textbf{Convolutional Neural Networks}}\\[4em]
+
+  \includegraphics[width=0.6\textwidth]{university_of_koblenz_logo.png}\\[2em]
+
+  {\large \textbf{UNIVERSITY OF KOBLENZ}}\\
+  {\large Institute for Web Science and Technologies}\\[2em]
+
+  {\large \textbf{MAY 2025}}\\[1em]
+  {\large \textbf{REPORT}}\\[4em]
+
+  \begin{minipage}{0.45\textwidth}
+    \raggedright
+    {\large \textbf{Submitted By:}}\\[0.5em]
+    1. Neha\\
+    2. Sulochana\\
+    3. Vineeth\\
+    4. Bhadresh
+  \end{minipage}%%
+  \hfill
+  \begin{minipage}{0.45\textwidth}
+    \raggedleft
+    {\large \textbf{To:}}\\[0.5em]
+    Jennifer Wendland\\
+    Prof. Dr. Maik Kschischo
+  \end{minipage}
+
+  \vfill
+\end{titlepage}
+
+\newpage
+\section*{ABSTRACT}
+Convolutional Neural Networks (CNNs) have become a foundational architecture in the field of Deep Learning, particularly for image classification and recognition tasks. Their ability to automatically learn hierarchical features from grid-like data structures such as images has led to significant advancements in computer vision, medical diagnostics, and autonomous systems. This report explores the fundamental structure of CNNs, including convolutional layers, activation functions, pooling layers, and fully connected layers. A practical application is demonstrated using a classic image classification task, followed by a discussion of the results and potential future directions. The effectiveness of CNNs lies in their capacity to extract complex features while reducing computational costs through parameter sharing and local connectivity.
+
+% ------------ Table of Contents ------------
+\newpage
+\renewcommand{\contentsname}{Table of Contents} % if you want “Table of Contents” instead of default “Contents”
+\tableofcontents
+\newpage
+
+% ------------ List of Figures ------------
+\newpage
+\section*{II. List of Figures}
+\addcontentsline{toc}{section}{II. List of Figures}
+
+Figure 1: Schematic diagram of a basic Convolutional Neural Network (CNN) architecture, illustrating the sequence of layers including convolutional, pooling, and fully connected layers.
+
+% ------------ List of Tables ------------
+\newpage
+\section*{III. List of Tables}
+\addcontentsline{toc}{section}{III. List of Tables}
+
+Table 1: Functional Contribution of CNN Components.
+
+% ------------ List of Abbreviations ------------
+\newpage
+\section*{IV. List of Abbreviations}
+\addcontentsline{toc}{section}{IV. List of Abbreviations}
+
+\begin{description}
+  \item[AI] Artificial Intelligence
+  \item[CNN] Convolutional Neural Network
+  \item[ReLU] Rectified Linear Unit
+  \item[FC] Fully Connected
+  \item[ML] Machine Learning
+\end{description}
+\newpage
+
+% ------------ Introduction ------------
+\newpage
+\section{Introduction}
+Deep Learning has transformed the field of artificial intelligence by enabling systems to learn directly from data. Among the many architectures developed, Convolutional Neural Networks (CNNs) have emerged as a dominant model for tasks involving visual and spatial data. CNNs are inspired by the visual cortex of animals and are specifically designed to process pixel data with minimal pre-processing. Their primary strength lies in the ability to learn local patterns such as edges and textures in the early layers and more complex features like shapes and objects in deeper layers. This makes CNNs particularly effective for image classification, object detection, facial recognition, and even in domains such as medical imaging and self-driving cars. By automating the feature extraction process and reducing the number of parameters compared to traditional fully connected networks, CNNs allow for efficient and scalable deep learning solutions. This report focuses on understanding the core architecture of CNNs and their application in a real-world image classification task.
+
+% ------------ Methods/Approach ------------
+\section{Methods/Approach}
+Convolutional Neural Networks (CNNs) are deep learning models designed for grid-like data such as images. They are highly effective for image classification because they can automatically learn spatial features through layered processing.
+
+A typical CNN consists of the following layers:
+
+\subsection{Convolutional Layers}
+These layers apply filters (kernels) that scan over the input image to detect local features like edges, textures, or shapes.
+
+\subsection{Activation Function (ReLU)}
+The Rectified Linear Unit introduces non-linearity by replacing negative values with zero, allowing the network to model complex patterns.
+
+
+\end{document}
